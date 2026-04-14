@@ -107,6 +107,12 @@ The script prompts you for:
 |------|-----------|----------|
 | **Claude Code** | Workspace root | Cross-repo reasoning, vault updates, architecture decisions, debugging across boundaries |
 | **Cursor** | Individual repo | Focused feature work, UI changes, single-file fixes, fast iteration |
+
+### Where to work from
+
+**Workspace root** — use this for cross-repo work. Claude Code reads the workspace-level `CLAUDE.md`, which points to the vault and your profile. Open your terminal here when you need to reason across repos, update architecture, or do anything that touches multiple parts of the system.
+
+**Inside a single repo** — use this for focused work. Cursor reads `.cursorrules` and the repo-level `CLAUDE.md`, which both point to the vault and your profile. Open Cursor here when you're building a feature, fixing a bug, or working within one codebase.
 | **Obsidian** | Vault folder | Reading docs, manual edits, graph view of your knowledge base |
 
 ### What each agent gets automatically
@@ -327,6 +333,28 @@ The agent auto-fills the date and prompts for the name.
 
 ---
 
+## Starting a New Project
+
+When you start a new project, just run the script again in a new folder:
+
+```bash
+mkdir new-project && cd new-project
+bash setup-workspace.sh
+```
+
+The script detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
+
+Each workspace is independent. You can have as many as you want:
+
+```
+~/.ai-profile/              ← shared across everything
+~/project-alpha/             ← workspace with its own vault
+~/project-beta/              ← separate workspace, separate vault, same you
+~/freelance-client/          ← another workspace, agent still knows your style
+```
+
+---
+
 ## Advanced: Graphify (Large Codebases)
 
 For codebases over ~200 files, consider adding [Graphify](https://pypi.org/project/graphifyy/) for structural analysis. Graphify maps your entire codebase into a graph of nodes (functions, classes, schemas) and edges (calls, imports, dependencies), then detects:
@@ -451,6 +479,12 @@ No. It starts blank. As you work with agents and correct their behavior, they'll
 
 **Does the profile sync between machines?**
 Not by default — it's just a local directory. You can make it a git repo if you want to sync it, but it's personal (not shared with a team), so local-only is fine for most people.
+
+**How do I start a second project?**
+Run the script in a new folder. It detects your existing `~/.ai-profile/` and reuses it — your agent already knows your preferences from day one. The vault is fresh for the new project.
+
+**Should I work from the workspace root or inside a repo?**
+Workspace root for cross-repo work (Claude Code). Inside a repo for focused work (Cursor). Both read the vault and your profile. Use Claude Code at the root when you need to reason across boundaries, Cursor inside a repo when you're building a feature.
 
 **Can I add non-code docs to the vault?**
 Keep the vault lean. It should contain only files that help agents write better code. Business docs, pitch decks, and partner lists belong elsewhere — they dilute the signal agents read on every session start.
