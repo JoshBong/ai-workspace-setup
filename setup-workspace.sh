@@ -95,6 +95,13 @@ else
   echo ""
 fi
 
+# Symlink profile into workspace so Cursor can write to it
+if [ ! -L "ai-profile" ]; then
+  ln -sf "$AI_PROFILE_DIR" ./ai-profile
+  echo -e "${GREEN}  Linked ./ai-profile → ~/.ai-profile/${NC}"
+  echo ""
+fi
+
 # ============================================================================
 # Step 1: Get project info
 # ============================================================================
@@ -579,7 +586,7 @@ Do not silently update the contract or push without surfacing the mismatch.
 
 ## 4. Operator Profile
 
-Read \`~/.ai-profile/\` before starting work — it contains the user's working style, code preferences, and past corrections. If you notice a behavioral pattern or the user corrects you, ask to update the profile. Never repeat a correction logged in \`~/.ai-profile/CORRECTIONS.md\`.
+Read \`../ai-profile/\` before starting work — it contains the user's working style, code preferences, and past corrections. If you notice a behavioral pattern or the user corrects you, ask to update the profile. Never repeat a correction logged in \`../ai-profile/CORRECTIONS.md\`.
 CURSOREOF
     echo -e "    ${GREEN}Created .cursorrules${NC}"
   else
@@ -591,7 +598,7 @@ CURSOREOF
     cat > "$repo_dir/CLAUDE.md" << REPOCLAUDEEOF
 # ${repo_dir}
 
-> Read \`~/.ai-profile/\` for working style, preferences, and past corrections.
+> Read \`../ai-profile/\` for working style, preferences, and past corrections.
 > Architecture, API contracts, and decisions live in \`../${VAULT_NAME}/\`.
 > Check there before writing code. \`API_CONTRACTS.md\` is the final authority on endpoint shapes.
 > Before pushing, diff code changes against \`API_CONTRACTS.md\` — if they diverge, surface the mismatch and ask before proceeding.
@@ -654,6 +661,7 @@ echo "  │   ├── PREFERENCES.md     ← Code taste and settings"
 echo "  │   └── CORRECTIONS.md     ← Behavioral corrections log"
 echo ""
 echo "  $(pwd)/"
+echo "  ├── ai-profile/            ← symlink → ~/.ai-profile/ (so Cursor can write)"
 echo "  ├── CLAUDE.md              ← Claude Code reads this every session"
 echo "  ├── ${VAULT_NAME}/"
 echo "  │   ├── ARCHITECTURE.md    ← How your system works"

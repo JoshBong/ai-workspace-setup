@@ -43,6 +43,7 @@ A workspace structure where AI agents automatically read shared documentation be
 └── CORRECTIONS.md           ← Behavioral corrections log
 
 your-workspace/
+├── ai-profile/            ← symlink → ~/.ai-profile/ (so Cursor can write)
 ├── CLAUDE.md              ← Claude Code reads this every session
 ├── your-vault/            ← Obsidian vault (shared brain)
 │   ├── ARCHITECTURE.md    ← How the system works
@@ -50,7 +51,7 @@ your-workspace/
 │   ├── DECISIONS.md       ← What was tried, what failed, and why
 │   └── SESSION_LOG.md     ← Session handoff notes
 ├── repo-1/
-│   ├── .cursorrules       ← Cursor reads this, points to vault + profile
+│   ├── .cursorrules       ← Cursor reads this, points to vault + profile via symlink
 │   └── CLAUDE.md          ← Claude Code reads this inside the repo
 └── repo-2/
     ├── .cursorrules
