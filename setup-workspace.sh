@@ -342,6 +342,33 @@ What was considered and why it was rejected/chosen. Two sentences max.
 
 **After writing:** Run \`cd ${VAULT_NAME} && git add DECISIONS.md && git commit -m "decision: [short title]" && git push\`
 
+---
+
+## Contract Drift Check — Before Every Push
+
+Before pushing code, compare your changes against \`./${VAULT_NAME}/API_CONTRACTS.md\`:
+
+1. Review the diff: which routes, request/response shapes, fields, status codes, or auth patterns changed?
+2. Read \`API_CONTRACTS.md\` and check whether it still matches the code you're about to push.
+
+**If you find a mismatch**, stop and say:
+
+> *"I found a contract drift: [describe the specific difference]. What would you like to do?"*
+> 1. **Update the contract** — I'll update \`API_CONTRACTS.md\` to match the code changes
+> 2. **Revert the code** — the contract is correct, I'll roll back the change
+> 3. **Check impact first** — I'll analyze what depends on this endpoint before deciding
+
+Do NOT silently update the contract. Do NOT silently push. Surface it, present the three options, and wait for a decision.
+
+**What counts as drift:**
+- A new endpoint exists in code but not in \`API_CONTRACTS.md\`
+- A documented endpoint was removed or renamed
+- Request or response fields were added, removed, or changed type
+- Status codes or error responses changed
+- Auth requirements for an endpoint changed
+
+---
+
 ### Natural triggers — check the vault after:
 - A feature is complete and ready to commit
 - The user says anything like "done", "ship it", "commit", "that's it for now"
@@ -431,6 +458,17 @@ The Obsidian vault at \`../${VAULT_NAME}/\` is the single source of truth for ar
 - Before proposing an alternative approach, check \`../${VAULT_NAME}/DECISIONS.md\` — it logs rejected approaches and why they were ruled out.
 - If a requirement is unclear, check the vault for more context before asking.
 - **Live decision capture:** When an approach fails, is abandoned, or a non-obvious choice is made mid-session, immediately suggest logging it to \`../${VAULT_NAME}/DECISIONS.md\`. Before writing, run \`cd ../${VAULT_NAME} && git pull\`. Format: \`## YYYY-MM-DD — Title (by [engineer name])\` followed by two sentences. After writing, run \`cd ../${VAULT_NAME} && git add DECISIONS.md && git commit -m "decision: [title]" && git push\`.
+
+## 3. Contract Drift Check
+
+Before pushing code, diff your changes against \`../${VAULT_NAME}/API_CONTRACTS.md\`. If any route, request/response shape, field, status code, or auth pattern has changed and the contract doesn't reflect it, stop and say:
+
+> *"I found a contract drift: [describe the specific difference]. What would you like to do?"*
+> 1. **Update the contract** — I'll update \`API_CONTRACTS.md\` to match the code
+> 2. **Revert the code** — the contract is correct, I'll roll back the change
+> 3. **Check impact first** — I'll analyze what depends on this before deciding
+
+Do not silently update the contract or push without surfacing the mismatch.
 CURSOREOF
     echo -e "    ${GREEN}Created .cursorrules${NC}"
   else
@@ -444,6 +482,7 @@ CURSOREOF
 
 > Architecture, API contracts, and decisions live in \`../${VAULT_NAME}/\`.
 > Check there before writing code. \`API_CONTRACTS.md\` is the final authority on endpoint shapes.
+> Before pushing, diff code changes against \`API_CONTRACTS.md\` — if they diverge, surface the mismatch and ask before proceeding.
 > This is ${REPO_STACK}.
 REPOCLAUDEEOF
     echo -e "    ${GREEN}Created CLAUDE.md${NC}"
