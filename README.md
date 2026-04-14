@@ -6,7 +6,7 @@
 
 One script sets up a multi-repo workspace where Claude Code and Cursor share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
 </div>
 
@@ -420,4 +420,4 @@ Keep the vault lean. It should contain only files that help agents write better 
 
 ## License
 
-MIT — use it however you want.
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and noncommercial use. Companies need a commercial license. Contact [Joshua Huang](https://github.com/JoshBong) for commercial licensing.
