@@ -88,7 +88,7 @@ The script prompts you for:
 ├─────────────────────────────────────────────────────────┤
 │  OBSIDIAN VAULT (shared brain)                          │
 │  Architecture, contracts, decisions                     │
-│  Auto-syncs via Obsidian Git plugin every 5 minutes     │
+│  Auto-commits/pulls every 1 min with author + timestamp │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -104,11 +104,13 @@ The script prompts you for:
 - Reads `CLAUDE.md` → told to read all three vault files before doing anything
 - After finishing work, prompted: *"Before we wrap up — API_CONTRACTS.md needs updating because you added an endpoint. Want me to do that now?"*
 - When an approach fails mid-session: *"That's worth logging in DECISIONS.md — tried X, failed because Y. Want me to add it now?"*
+- Before pushing, runs a contract drift check — if code diverges from `API_CONTRACTS.md`, surfaces the mismatch with three options: update the contract, revert the code, or check impact first
 
 **Cursor** (opened in a single repo):
 - Reads `.cursorrules` → knows the tech stack, key patterns, and where the vault is
 - Checks `DECISIONS.md` before proposing alternatives
 - Logs failed approaches in real time so other engineers don't repeat them
+- Before pushing, diffs code against `API_CONTRACTS.md` and surfaces any mismatch
 
 ### The decision log
 
@@ -233,16 +235,18 @@ The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). A
 
 1. **Open Obsidian** → File → Open Vault → select `your-vault/`
 2. **Install the Obsidian Git plugin** → Settings → Community Plugins → Browse → search "Obsidian Git" → Install → Enable
-3. **Configure auto-commit** → Obsidian Git settings → set auto-commit interval to 5 minutes
+3. **Config is pre-set** — the setup script creates the plugin config automatically
 
-### Recommended Obsidian settings
+### Pre-configured Obsidian Git settings
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Auto-commit interval | 5 minutes | Keeps vault synced without manual commits |
-| Auto-pull interval | 5 minutes | Gets other engineers' changes |
+| Auto-commit interval | 1 minute | Keeps vault synced without manual commits |
+| Auto-pull interval | 1 minute | Gets other engineers' changes immediately |
 | Pull on startup | Enabled | Always start with latest vault |
-| Commit message format | `vault: {{date}}` | Clean git history |
+| Push after commit | Enabled | Changes are shared automatically |
+| Commit message format | `vault: {{date}} by {{author}}` | Attribution + timestamp in git history |
+| List changed files | Enabled | See what was touched in each commit |
 
 ### For teams
 
@@ -251,7 +255,7 @@ Each engineer:
 2. Opens it in Obsidian
 3. Enables Obsidian Git with the settings above
 
-The vault syncs via git. When one engineer logs a decision, every other engineer's agent sees it within 5 minutes (or immediately if the agent does `git pull` before reading, which the setup configures).
+The vault syncs via git. When one engineer logs a decision, every other engineer's agent sees it within 1 minute (or immediately if the agent does `git pull` before reading, which the setup configures).
 
 ---
 

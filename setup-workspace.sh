@@ -165,6 +165,21 @@ cat > "$VAULT_NAME/.obsidian/community-plugins.json" << 'EOF'
 ["obsidian-git"]
 EOF
 
+# Obsidian Git plugin config
+mkdir -p "$VAULT_NAME/.obsidian/plugins/obsidian-git"
+cat > "$VAULT_NAME/.obsidian/plugins/obsidian-git/data.json" << 'EOF'
+{
+  "autoSaveInterval": 1,
+  "autoPullInterval": 1,
+  "autoPullOnBoot": true,
+  "autoPushAfterCommit": true,
+  "commitMessage": "vault: {{date}} by {{author}}",
+  "autoCommitMessage": "vault: {{date}} by {{author}}",
+  "commitDateFormat": "YYYY-MM-DD HH:mm",
+  "listChangedFilesInMessageBody": true
+}
+EOF
+
 cat > "$VAULT_NAME/.obsidian/appearance.json" << 'EOF'
 {
   "accentColor": ""
@@ -551,7 +566,7 @@ echo ""
 echo -e "${BOLD}Next steps:${NC}"
 echo ""
 echo "  1. Open ${VAULT_NAME}/ in Obsidian (File → Open Vault)"
-echo "     Then install the 'Obsidian Git' community plugin for auto-sync"
+echo "     Then install the 'Obsidian Git' community plugin (config is pre-set)"
 echo ""
 echo "  2. Add a git remote to the vault so it syncs:"
 echo "     cd ${VAULT_NAME} && git remote add origin <your-vault-repo-url> && git push -u origin main"
@@ -569,6 +584,6 @@ echo -e "${BOLD}How it works:${NC}"
 echo ""
 echo "  Claude Code → reads CLAUDE.md → reads vault → understands your project"
 echo "  Cursor      → reads .cursorrules → checks vault → writes code correctly"
-echo "  Obsidian    → auto-commits vault changes every 5 min (with Git plugin)"
+echo "  Obsidian    → auto-commits/pulls every 1 min with author + timestamp (Git plugin)"
 echo "  DECISIONS.md → shared memory between all engineers and agents"
 echo ""
