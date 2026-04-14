@@ -1,17 +1,37 @@
-# AI-Augmented Workspace Setup
+<div align="center">
 
-A one-script setup for multi-repo workspaces with an Obsidian vault as a shared brain for AI coding agents (Claude Code + Cursor).
+# 🧠 AI Workspace Setup
 
-## What it does
+**Give your AI agents a shared brain across repos.**
 
-Creates a workspace where your AI agents share context across repos and remember decisions between sessions:
+One script sets up a multi-repo workspace where Claude Code and Cursor share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+</div>
+
+---
+
+## The Problem
+
+AI coding agents start every session with amnesia. They don't know:
+- What you tried yesterday that didn't work
+- How your repos connect to each other
+- What conventions your team follows
+- Why you chose approach A over approach B
+
+You end up re-explaining context every session, and your agents keep suggesting things you've already rejected.
+
+## The Solution
+
+A workspace structure where AI agents automatically read shared documentation before writing any code:
 
 ```
 your-workspace/
 ├── CLAUDE.md              ← Claude Code reads this every session
-├── your-vault/            ← Obsidian vault (shared source of truth)
+├── your-vault/            ← Obsidian vault (shared brain)
 │   ├── ARCHITECTURE.md    ← How the system works
-│   ├── API_CONTRACTS.md   ← Endpoint shapes
+│   ├── API_CONTRACTS.md   ← Endpoint shapes (single source of truth)
 │   └── DECISIONS.md       ← What was tried, what failed, and why
 ├── repo-1/
 │   ├── .cursorrules       ← Cursor reads this, points to vault
@@ -21,7 +41,11 @@ your-workspace/
     └── CLAUDE.md
 ```
 
-## Quick start
+**The vault is the single source of truth.** Every agent reads it before suggesting code. When someone rejects an approach or makes a non-obvious choice, the agent logs it to `DECISIONS.md` in real time. The next engineer's agent reads that log on session start — no one wastes time re-discovering dead ends.
+
+---
+
+## Quick Start
 
 ```bash
 mkdir my-workspace && cd my-workspace
@@ -29,87 +53,303 @@ curl -sO https://raw.githubusercontent.com/JoshBong/ai-workspace-setup/main/setu
 bash setup-workspace.sh
 ```
 
-Or clone this repo and run the script:
+The script prompts you for:
+1. **Project name** — names the vault and workspace
+2. **Repo URLs** — paste as many as you want (git URLs or existing folder names), press Enter when done
+3. **Project description** — one line, so the agent understands what you're building
+4. **Tech stack** — auto-detected per repo, but you can describe the overall stack
+5. **Your name** — for decision log attribution
 
-```bash
-git clone https://github.com/JoshBong/ai-workspace-setup.git
-cd ai-workspace-setup
-bash setup-workspace.sh
+That's it. Everything is created, wired up, and ready.
+
+---
+
+## How It Works
+
+### The Three Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CLAUDE CODE (workspace root)                            │
+│  Cross-repo reasoning, vault updates, architecture       │
+│  Reads: CLAUDE.md → vault files → understands everything │
+├─────────────────────────────────────────────────────────┤
+│  CURSOR (individual repo)                                │
+│  Focused edits, 1-5 files, fast iteration                │
+│  Reads: .cursorrules → checks vault → writes code        │
+├─────────────────────────────────────────────────────────┤
+│  OBSIDIAN VAULT (shared brain)                           │
+│  Architecture, contracts, decisions                       │
+│  Auto-syncs via Obsidian Git plugin every 5 minutes      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-The script will prompt you for:
-- Project name
-- Repo URLs (paste as many as you want, press Enter when done)
-- Project description and tech stack
-- Your name (for decision log attribution)
+| Tool | Open from | Best for |
+|------|-----------|----------|
+| **Claude Code** | Workspace root | Cross-repo reasoning, vault updates, architecture decisions, debugging across boundaries |
+| **Cursor** | Individual repo | Focused feature work, UI changes, single-file fixes, fast iteration |
+| **Obsidian** | Vault folder | Reading docs, manual edits, graph view of your knowledge base |
 
-## How it works
+### What each agent gets automatically
 
-### The vault (Obsidian)
+**Claude Code** (opened from workspace root):
+- Reads `CLAUDE.md` → told to read all three vault files before doing anything
+- After finishing work, prompted: *"Before we wrap up — API_CONTRACTS.md needs updating because you added an endpoint. Want me to do that now?"*
+- When an approach fails mid-session: *"That's worth logging in DECISIONS.md — tried X, failed because Y. Want me to add it now?"*
 
-The vault is the single source of truth. AI agents read it before writing any code.
+**Cursor** (opened in a single repo):
+- Reads `.cursorrules` → knows the tech stack, key patterns, and where the vault is
+- Checks `DECISIONS.md` before proposing alternatives
+- Logs failed approaches in real time so other engineers don't repeat them
 
-- **ARCHITECTURE.md** — how your system is designed, how repos connect, key data structures
-- **API_CONTRACTS.md** — every endpoint shape. If code and docs disagree, this file wins.
-- **DECISIONS.md** — reverse-chronological log of rejected approaches and non-obvious choices. Agents check this before suggesting alternatives you've already tried.
+### The decision log
 
-Open the vault in [Obsidian](https://obsidian.md/) and install the **Obsidian Git** community plugin for auto-sync.
+`DECISIONS.md` is the most important file. It's a reverse-chronological log that captures:
 
-### Claude Code (cross-repo reasoning)
+```markdown
+## 2024-03-15 — Rejected Redis for caching (by Sarah)
 
-Open Claude Code from the workspace root. It reads `CLAUDE.md` on session start which tells it to:
+Evaluated Redis for API response caching. Rejected because our Supabase plan includes
+edge caching and adding Redis doubles infrastructure cost for marginal latency improvement.
 
-1. Read all three vault files before suggesting anything
-2. Prompt you to update the vault when you finish a feature or make a non-obvious decision
-3. Capture failed approaches in real-time ("That's worth logging in DECISIONS.md — want me to add it now?")
+## 2024-03-14 — Auth uses httpOnly cookies, not localStorage (by Mike)
 
-### Cursor (focused edits)
+Considered storing JWT in localStorage for simplicity. Chose httpOnly cookies because
+localStorage is vulnerable to XSS and our app handles payment data.
+```
 
-Open Cursor in a single repo. `.cursorrules` points it to the vault for context and tells it to:
+Every agent reads this on session start. When Sarah's agent suggests Redis next week, it already knows why that was rejected. When a new engineer joins, their agent has the full history of architectural decisions from day one.
 
-1. Check API contracts before writing code
-2. Check DECISIONS.md before proposing alternatives
-3. Log failed approaches mid-session
+**Entries are auto-prompted** — you don't need to remember to write them. The agent detects when you say "that didn't work", "scrap that", "let's try something else" and offers to log it.
 
-### The split
+---
 
-| Tool | Open from | Use for |
-|------|-----------|---------|
-| Claude Code | Workspace root | Cross-repo reasoning, vault updates, architecture decisions |
-| Cursor | Individual repo | Focused 1-5 file edits, feature implementation |
-| Obsidian | Vault folder | Reading/writing docs, auto-syncs via Git plugin |
+## What the Script Creates
 
-## What the script auto-detects
+### Vault files
 
-The setup script detects your tech stack per repo and tailors `.cursorrules` accordingly:
+| File | Purpose | When to update |
+|------|---------|----------------|
+| `ARCHITECTURE.md` | How your system works — repos, data flow, key structures | When you add a service, change how repos connect, or discover a structural gap |
+| `API_CONTRACTS.md` | Every endpoint shape — request, response, errors | When any endpoint changes. This file is the final authority. |
+| `DECISIONS.md` | Rejected approaches and non-obvious choices | Automatically prompted by agents mid-session |
 
-- **Next.js** / React / Vue / Svelte (from `package.json`)
-- **FastAPI** / Django / Flask (from `requirements.txt`)
-- **Go** (from `go.mod`)
-- **Rust** (from `Cargo.toml`)
+### Per-repo agent files
+
+| File | Read by | Purpose |
+|------|---------|---------|
+| `.cursorrules` | Cursor | Tech stack context, vault pointers, coding patterns |
+| `CLAUDE.md` | Claude Code | Vault pointer + any repo-specific agent instructions |
+
+### Auto-detected tech stacks
+
+The script reads your repo files and tailors `.cursorrules` to the right framework:
+
+| Detected via | Identified as |
+|-------------|---------------|
+| `package.json` with `next` | Next.js (TypeScript, React) |
+| `package.json` with `react` | React |
+| `package.json` with `vue` | Vue.js |
+| `package.json` with `svelte` | SvelteKit |
+| `requirements.txt` with `fastapi` | FastAPI (Python) |
+| `requirements.txt` with `django` | Django (Python) |
+| `requirements.txt` with `flask` | Flask (Python) |
+| `go.mod` | Go |
+| `Cargo.toml` | Rust |
+
+---
+
+## Obsidian Setup
+
+The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). After running the setup script:
+
+1. **Open Obsidian** → File → Open Vault → select `your-vault/`
+2. **Install the Obsidian Git plugin** → Settings → Community Plugins → Browse → search "Obsidian Git" → Install → Enable
+3. **Configure auto-commit** → Obsidian Git settings → set auto-commit interval to 5 minutes
+
+### Recommended Obsidian settings
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| Auto-commit interval | 5 minutes | Keeps vault synced without manual commits |
+| Auto-pull interval | 5 minutes | Gets other engineers' changes |
+| Pull on startup | Enabled | Always start with latest vault |
+| Commit message format | `vault: {{date}}` | Clean git history |
+
+### For teams
+
+Each engineer:
+1. Clones the vault repo
+2. Opens it in Obsidian
+3. Enables Obsidian Git with the settings above
+
+The vault syncs via git. When one engineer logs a decision, every other engineer's agent sees it within 5 minutes (or immediately if the agent does `git pull` before reading, which the setup configures).
+
+---
+
+## For Teams
+
+### How multi-engineer workflows work
+
+```
+Engineer A (Cursor, settled-web)          Engineer B (Cursor, settled-api)
+         │                                          │
+         ├─ Tries approach X                        │
+         ├─ It fails                                │
+         ├─ Agent: "Log to DECISIONS.md?"           │
+         ├─ Yes → git pull, write, commit, push     │
+         │                                          │
+         │         ┌──── vault syncs ────┐          │
+         │         │                     │          │
+         │         ▼                     ▼          │
+         │    DECISIONS.md now has:                  │
+         │    "Tried X, failed because Y"           │
+         │                                          │
+         │                     Engineer B starts new session
+         │                     Agent reads DECISIONS.md
+         │                     Already knows not to try X
+```
+
+### What each engineer needs
+
+1. Run `bash setup-workspace.sh` with the same repo URLs
+2. Open the vault in Obsidian with Obsidian Git enabled
+3. Use Cursor for focused edits, Claude Code for cross-repo work
+4. That's it — agents handle the rest
+
+### Decision log attribution
+
+Every entry includes who made the decision and when:
+
+```markdown
+## 2024-03-15 — Title of decision (by Engineer Name)
+```
+
+The agent auto-fills the date and prompts for the name.
+
+---
+
+## Advanced: Graphify (Large Codebases)
+
+For codebases over ~200 files, consider adding [Graphify](https://pypi.org/project/graphifyy/) for structural analysis. Graphify maps your entire codebase into a graph of nodes (functions, classes, schemas) and edges (calls, imports, dependencies), then detects:
+
+- **God Nodes** — data structures where a single change ripples through dozens of files
+- **Communities** — clusters of tightly coupled code that should be understood together
+- **Bridge nodes** — types that connect otherwise separate parts of the system
+- **Knowledge gaps** — isolated functions, thin clusters, and undocumented dependencies
+
+### Setup
+
+```bash
+# Create a dedicated venv (keep separate from your project venvs)
+python3 -m venv .venv-graphify
+source .venv-graphify/bin/activate
+pip install graphifyy
+```
+
+### Run an audit
+
+```bash
+# From workspace root, with the graphify venv activated
+graphify ./ --output ./your-vault/GRAPH_REPORT.md
+```
+
+This generates a full report in the vault with God Nodes, communities, bridges, and gaps. The output goes into Obsidian where you and your agents can reference it.
+
+### When to run
+
+| Trigger | Why |
+|---------|-----|
+| Weekly (or start of sprint) | Catch architectural drift before it compounds |
+| Before touching a God Node | See the blast radius before you start |
+| After a major refactor | Verify community boundaries didn't break |
+
+### Cost note
+
+Graphify uses Claude tokens for semantic extraction. For cost-conscious runs, use `--no-semantic` for AST-only analysis (faster, free, but misses semantic relationships).
+
+---
+
+## Advanced: GitNexus (Code Intelligence)
+
+[GitNexus](https://github.com/abhigyanpatwari/GitNexus) indexes your codebase into a knowledge graph and exposes it to AI agents via MCP. It gives Cursor and Claude Code blast radius analysis, execution flow tracing, and safe multi-file renames.
+
+### Setup
+
+```bash
+npm install -g gitnexus
+
+# Index each repo
+cd your-repo && npx gitnexus analyze
+```
+
+The setup script will attempt this automatically if GitNexus is installed.
+
+### What it adds
+
+| Capability | What it does |
+|-----------|--------------|
+| **Blast radius** | Before editing a function, see every caller and downstream dependency |
+| **Execution flows** | Trace how a request flows through your codebase step by step |
+| **Safe renames** | Rename a symbol across all files using the call graph, not find-and-replace |
+| **Change detection** | Before committing, verify your changes only affect expected files |
+
+### MCP configuration
+
+GitNexus runs as an MCP server that AI agents connect to:
+
+**Cursor** (`~/.cursor/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "gitnexus": {
+      "command": "npx",
+      "args": ["-y", "gitnexus@latest", "mcp"]
+    }
+  }
+}
+```
+
+**Claude Code:**
+```bash
+claude mcp add gitnexus -- npx -y gitnexus@latest mcp
+```
+
+---
 
 ## Requirements
 
-- `git`
-- `bash`
-- [Obsidian](https://obsidian.md/) (free, for the vault)
-- [Claude Code](https://claude.ai/claude-code) and/or [Cursor](https://cursor.com/) (for AI agents)
-- `npm` (optional, for [GitNexus](https://www.npmjs.com/package/gitnexus) code indexing)
+| Requirement | Required? | Purpose |
+|------------|-----------|---------|
+| `git` | Yes | Vault sync, repo cloning |
+| `bash` | Yes | Running the setup script |
+| [Obsidian](https://obsidian.md/) | Yes | Opening and editing the vault |
+| [Claude Code](https://claude.ai/claude-code) | Recommended | Cross-repo AI reasoning |
+| [Cursor](https://cursor.com/) | Recommended | Focused AI-assisted editing |
+| `npm` | Optional | For GitNexus code indexing |
+| `python3` | Optional | For Graphify structural analysis |
 
-## After setup
+---
 
-1. **Fill in ARCHITECTURE.md** — describe how your system works. This is the most important file.
-2. **Add a git remote to the vault** — so it syncs across your team:
-   ```bash
-   cd your-vault && git remote add origin <url> && git push -u origin main
-   ```
-3. **Install Obsidian Git plugin** — Settings → Community Plugins → Browse → "Obsidian Git" → Enable. This auto-commits every 5 minutes.
-4. **Start coding** — the agents handle the rest.
+## FAQ
 
-## For teams
+**Can I use this with just one repo?**
+Yes. The vault still adds value as a persistent memory layer — decisions, architecture notes, and API contracts survive between sessions.
 
-Each engineer runs the setup script with the same repo URLs and vault remote. The vault syncs via git. When one engineer logs a failed approach in DECISIONS.md, every other engineer's agent sees it on their next session start.
+**Does this work with editors other than Cursor?**
+The vault and `CLAUDE.md` work with any tool that reads markdown. `.cursorrules` is Cursor-specific, but the same content could be adapted to Windsurf (`.windsurfrules`) or other AI editors.
+
+**How big can DECISIONS.md get?**
+At ~100 entries (2-3 months of active development), rotate it: move the current file to `archive/DECISIONS-2024-Q1.md` and start fresh. Agents only read the current file on session start.
+
+**What if two engineers update DECISIONS.md at the same time?**
+The setup configures agents to `git pull` before writing and `git push` immediately after. If a conflict still happens, it's a simple text merge — entries are independent blocks.
+
+**Can I add non-code docs to the vault?**
+Keep the vault lean. It should contain only files that help agents write better code. Business docs, pitch decks, and partner lists belong elsewhere — they dilute the signal agents read on every session start.
+
+---
 
 ## License
 
-MIT
+MIT — use it however you want.
