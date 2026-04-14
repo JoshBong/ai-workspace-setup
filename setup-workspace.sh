@@ -3,28 +3,42 @@
 # AI-Augmented Workspace Setup
 # ============================================================================
 # Sets up a multi-repo workspace with an Obsidian vault as the shared brain
-# for AI coding agents (Claude Code + Cursor).
+# for AI coding agents (Claude Code, Cursor, Codex, Windsurf, etc.).
 #
 # What this creates:
+#   ~/.ai-profile/              ← Global AI profile (persists across projects)
+#   │   ├── WORKING_STYLE.md
+#   │   ├── PREFERENCES.md
+#   │   └── CORRECTIONS.md
+#
 #   your-workspace/
-#   ├── CLAUDE.md           ← Claude Code reads this on every session start
-#   ├── your-vault/         ← Obsidian vault (shared source of truth)
-#   │   ├── ARCHITECTURE.md ← How the system works
-#   │   ├── API_CONTRACTS.md← Endpoint shapes (if applicable)
-#   │   ├── DECISIONS.md    ← What was tried and why it failed/worked
-#   │   └── .obsidian/      ← Obsidian config (auto-created)
-#   ├── repo-1/             ← Your first repo (cloned or existing)
-#   │   ├── .cursorrules    ← Cursor reads this, points to vault
-#   │   └── CLAUDE.md       ← Claude Code reads this when inside the repo
-#   └── repo-2/             ← Your second repo (optional)
-#       ├── .cursorrules
-#       └── CLAUDE.md
+#   ├── .ai-rules/              ← Agent instructions (script-owned, updatable)
+#   ├── .workspace-config       ← Saved config for updates
+#   ├── ai-profile/             ← Symlink → ~/.ai-profile/
+#   ├── CLAUDE.md               ← Claude Code pointer (user-owned)
+#   ├── your-vault/             ← Obsidian vault (shared source of truth)
+#   │   ├── ARCHITECTURE.md
+#   │   ├── API_CONTRACTS.md
+#   │   ├── DECISIONS.md
+#   │   ├── SESSION_LOG.md
+#   │   └── .obsidian/
+#   ├── repo-1/
+#   │   ├── .ai-rules/          ← Agent instructions (script-owned)
+#   │   ├── CLAUDE.md           ← Pointer (user-owned)
+#   │   └── .cursorrules        ← Pointer (user-owned)
+#   └── repo-2/
+#       ├── .ai-rules/
+#       ├── CLAUDE.md
+#       └── .cursorrules
 #
 # Usage:
 #   1. Create an empty folder for your workspace
 #   2. Put this script in that folder
 #   3. Run: bash setup-workspace.sh
 #   4. Follow the prompts
+#
+# To update agent rules after a new release:
+#   bash update-workspace.sh
 #
 # Requirements: git, node (optional, for GitNexus)
 # ============================================================================
@@ -37,6 +51,8 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
+
+TEMPLATE_VERSION="1.0"
 
 echo ""
 echo -e "${BOLD}============================================${NC}"
@@ -95,7 +111,7 @@ else
   echo ""
 fi
 
-# Symlink profile into workspace so Cursor can write to it
+# Symlink profile into workspace so all agents can write to it
 if [ ! -L "ai-profile" ]; then
   ln -sf "$AI_PROFILE_DIR" ./ai-profile
   echo -e "${GREEN}  Linked ./ai-profile → ~/.ai-profile/${NC}"
@@ -139,7 +155,7 @@ if [ ${#REPOS[@]} -eq 0 ]; then
 fi
 
 # ============================================================================
-# Step 2: Describe your project (for CLAUDE.md context)
+# Step 2: Describe your project
 # ============================================================================
 
 echo ""
@@ -162,17 +178,49 @@ read -p "Name: " ENGINEER_NAME
 ENGINEER_NAME=${ENGINEER_NAME:-Engineer}
 
 # ============================================================================
-# Step 3: Clone repos
+# Step 3: Agent selection
 # ============================================================================
 
 echo ""
-echo -e "${BLUE}Step 4: Setting up repos...${NC}"
+echo -e "${BLUE}Step 4: Which AI agents do you use?${NC}"
+echo ""
+echo "Supported: claude, cursor, codex, windsurf"
+echo "Enter space-separated (e.g., 'claude cursor')"
+echo "Default: claude"
+echo ""
+read -p "Agents: " AGENTS_INPUT
+AGENTS_INPUT=${AGENTS_INPUT:-claude}
+
+AGENTS=()
+for agent in $AGENTS_INPUT; do
+  agent_lower=$(echo "$agent" | tr '[:upper:]' '[:lower:]')
+  case "$agent_lower" in
+    claude|cursor|codex|windsurf)
+      AGENTS+=("$agent_lower")
+      ;;
+    *)
+      echo -e "${YELLOW}  Unknown agent '$agent' — skipping${NC}"
+      ;;
+  esac
+done
+
+if [ ${#AGENTS[@]} -eq 0 ]; then
+  AGENTS=("claude")
+fi
+
+echo -e "${GREEN}  Selected agents: ${AGENTS[*]}${NC}"
+
+# ============================================================================
+# Step 4: Clone repos
+# ============================================================================
+
+echo ""
+echo -e "${BLUE}Step 5: Setting up repos...${NC}"
 echo ""
 
 REPO_DIRS=()
 for repo in "${REPOS[@]}"; do
   if [[ "$repo" == http* ]] || [[ "$repo" == git@* ]]; then
-    # It's a URL — clone it
     repo_dir=$(basename "$repo" .git)
     if [ -d "$repo_dir" ]; then
       echo -e "${YELLOW}  $repo_dir already exists, skipping clone${NC}"
@@ -182,7 +230,6 @@ for repo in "${REPOS[@]}"; do
     fi
     REPO_DIRS+=("$repo_dir")
   else
-    # It's a folder name
     if [ -d "$repo" ]; then
       echo -e "${GREEN}  Found existing folder: $repo${NC}"
       REPO_DIRS+=("$repo")
@@ -193,11 +240,11 @@ for repo in "${REPOS[@]}"; do
 done
 
 # ============================================================================
-# Step 4: Create the Obsidian vault
+# Step 5: Create the Obsidian vault
 # ============================================================================
 
 echo ""
-echo -e "${BLUE}Step 5: Creating Obsidian vault (${VAULT_NAME})...${NC}"
+echo -e "${BLUE}Step 6: Creating Obsidian vault (${VAULT_NAME})...${NC}"
 echo ""
 
 mkdir -p "$VAULT_NAME"
@@ -323,7 +370,7 @@ cat > "$VAULT_NAME/DECISIONS.md" << EOF
 
 ## $(date +%Y-%m-%d) — Workspace setup (by ${ENGINEER_NAME})
 
-Set up AI-augmented workspace with Obsidian vault as shared brain, CLAUDE.md for session context, and .cursorrules per repo. Vault is the single source of truth — agents read it before writing code.
+Set up AI-augmented workspace with Obsidian vault as shared brain, CLAUDE.md for session context, and .ai-rules per repo. Vault is the single source of truth — agents read it before writing code.
 EOF
 
 # SESSION_LOG.md
@@ -354,31 +401,27 @@ fi
 cd "$WORKSPACE_DIR"
 
 # ============================================================================
-# Step 5: Create workspace CLAUDE.md
+# Step 6: Create workspace .ai-rules/ and agent pointer files
 # ============================================================================
 
 echo ""
-echo -e "${BLUE}Step 6: Creating workspace CLAUDE.md...${NC}"
+echo -e "${BLUE}Step 7: Creating workspace agent rules...${NC}"
 echo ""
 
-# Build repo directory table
-REPO_TABLE=""
-for repo_dir in "${REPO_DIRS[@]}"; do
-  REPO_TABLE="${REPO_TABLE}| \`./${repo_dir}/\` | Repository |\n"
-done
+# --- Generate workspace .ai-rules/ (always regenerated) ---
 
-cat > CLAUDE.md << CLAUDEEOF
-# ${PROJECT_NAME} Workspace
+mkdir -p .ai-rules
 
-## On Every Session — Read Your Operator
+cat > .ai-rules/01-session-start.md << RULESEOF
+# Session Start
+
+## Read Your Operator
 
 Before reading the vault, read these files to understand who you're working with:
 
 1. \`~/.ai-profile/WORKING_STYLE.md\` — how this person works and communicates
 2. \`~/.ai-profile/PREFERENCES.md\` — code taste, commit style, autonomy level
 3. \`~/.ai-profile/CORRECTIONS.md\` — past behavioral corrections; never repeat these
-
----
 
 ## Then Read the Vault
 
@@ -390,28 +433,28 @@ Read these vault files before doing anything else:
 4. \`./${VAULT_NAME}/SESSION_LOG.md\` — where the last session left off
 
 Do not suggest code changes until you have read all of the above.
+RULESEOF
 
----
-
-## Vault Update Rules
+cat > .ai-rules/02-vault-rules.md << RULESEOF
+# Vault Update Rules
 
 After completing work, check whether the vault needs updating before ending the session.
 
-### Always update \`API_CONTRACTS.md\` when:
+## Always update \`API_CONTRACTS.md\` when:
 - An endpoint's request or response shape changed
 - A new endpoint was added or removed
 
-### Always update \`ARCHITECTURE.md\` when:
+## Always update \`ARCHITECTURE.md\` when:
 - A key data structure was added or changed
 - A new repo or service was added
 - A known gap was resolved or a new one discovered
 
-### Always add to \`DECISIONS.md\` when:
+## Always add to \`DECISIONS.md\` when:
 - An approach was tried and rejected (two sentences: what and why)
 - A non-obvious architectural choice was made
 - A library or pattern was considered and ruled out
 
-### Live decision capture (do this DURING the session, not just at the end):
+## Live decision capture (do this DURING the session, not just at the end):
 When any of these happen mid-session, immediately say: *"That's worth logging in DECISIONS.md — [one-line summary]. Want me to add it now?"*
 
 - An approach was attempted and failed or was abandoned
@@ -423,7 +466,7 @@ When any of these happen mid-session, immediately say: *"That's worth logging in
 
 Do NOT wait until the end of the session. Log it as it happens.
 
-### How to write a DECISIONS.md entry:
+## How to write a DECISIONS.md entry:
 
 **Before writing:** Run \`cd ${VAULT_NAME} && git pull\` to get the latest version.
 
@@ -436,9 +479,19 @@ What was considered and why it was rejected/chosen. Two sentences max.
 
 **After writing:** Run \`cd ${VAULT_NAME} && git add DECISIONS.md && git commit -m "decision: [short title]" && git push\`
 
----
+## Natural triggers — check the vault after:
+- A feature is complete and ready to commit
+- The user says anything like "done", "ship it", "commit", "that's it for now"
+- A bug fix revealed something undocumented about how the system works
 
-## Contract Drift Check — Before Every Push
+## How to update
+When a trigger fires, proactively say: *"Before we wrap up — [specific file] needs updating because [reason]. Want me to do that now?"*
+
+Do not silently skip it. Do not update the vault without confirming with the user first.
+RULESEOF
+
+cat > .ai-rules/03-contract-drift.md << RULESEOF
+# Contract Drift Check — Before Every Push
 
 Before pushing code, compare your changes against \`./${VAULT_NAME}/API_CONTRACTS.md\`:
 
@@ -460,57 +513,84 @@ Do NOT silently update the contract. Do NOT silently push. Surface it, present t
 - Request or response fields were added, removed, or changed type
 - Status codes or error responses changed
 - Auth requirements for an endpoint changed
+RULESEOF
 
----
+cat > .ai-rules/04-profile-rules.md << RULESEOF
+# Profile & Session Update Rules
 
-### Natural triggers — check the vault after:
-- A feature is complete and ready to commit
-- The user says anything like "done", "ship it", "commit", "that's it for now"
-- A bug fix revealed something undocumented about how the system works
-
-### How to update
-When a trigger fires, proactively say: *"Before we wrap up — [specific file] needs updating because [reason]. Want me to do that now?"*
-
-Do not silently skip it. Do not update the vault without confirming with the user first.
-
----
-
-## Profile Update Rules
-
-### Update \`~/.ai-profile/CORRECTIONS.md\` when:
+## Update \`~/.ai-profile/CORRECTIONS.md\` when:
 - The user corrects your behavior (e.g., "stop doing X", "don't do that", "I told you already")
 - Format: \`## YYYY-MM-DD — Short description\` followed by one sentence
 - Then update the relevant profile file (\`WORKING_STYLE.md\` or \`PREFERENCES.md\`) to reflect the correction
 
-### Update \`~/.ai-profile/WORKING_STYLE.md\` or \`PREFERENCES.md\` when:
+## Update \`~/.ai-profile/WORKING_STYLE.md\` or \`PREFERENCES.md\` when:
 - You notice a consistent pattern (e.g., user always discusses before coding)
 - The user states a preference explicitly (e.g., "I like conventional commits")
 - A correction changes a previously recorded preference
 - Always ask first: *"I noticed [pattern]. Want me to add that to your profile?"*
 
-### Update \`SESSION_LOG.md\` at session end:
+## Update \`SESSION_LOG.md\` at session end:
 - When the user says "done", "that's it", "ship it", or ends the session
 - Say: *"Want me to log a session handoff note so the next session knows where we left off?"*
 - Format: \`## YYYY-MM-DD — Summary (by [name])\` followed by two lines max
+RULESEOF
 
----
+echo "$TEMPLATE_VERSION" > .ai-rules/version.txt
+
+echo -e "${GREEN}  Created .ai-rules/ with agent instructions${NC}"
+
+# --- Generate workspace agent pointer files (only if they don't exist) ---
+
+# Build repo directory table
+REPO_TABLE=""
+for repo_dir in "${REPO_DIRS[@]}"; do
+  REPO_TABLE="${REPO_TABLE}| \`./${repo_dir}/\` | Repository |\n"
+done
+
+# Function to create a workspace-level pointer file
+create_workspace_pointer() {
+  local file_path="$1"
+  local agent_name="$2"
+
+  if [ ! -f "$file_path" ]; then
+    cat > "$file_path" << POINTEREOF
+# ${PROJECT_NAME} Workspace
+
+Read and follow all instructions in \`./.ai-rules/\` before starting work.
 
 ## Directory Map
 
 | Directory | What it is |
 |-----------|------------|
 | \`./${VAULT_NAME}/\` | Obsidian vault — source of truth for all agents |
+| \`./ai-profile/\` | Symlink to ~/.ai-profile/ (your operator profile) |
 $(echo -e "$REPO_TABLE")
-CLAUDEEOF
 
-echo -e "${GREEN}  Created CLAUDE.md at workspace root${NC}"
+## Project-Specific Notes
+
+(Add any custom instructions below. This file is yours — it won't be overwritten by updates.)
+POINTEREOF
+    echo -e "    ${GREEN}Created ${file_path} (${agent_name})${NC}"
+  else
+    echo -e "    ${YELLOW}${file_path} already exists — keeping it${NC}"
+  fi
+}
+
+for agent in "${AGENTS[@]}"; do
+  case "$agent" in
+    claude)   create_workspace_pointer "CLAUDE.md" "Claude Code" ;;
+    cursor)   create_workspace_pointer ".cursorrules" "Cursor" ;;
+    codex)    create_workspace_pointer "AGENTS.md" "Codex" ;;
+    windsurf) create_workspace_pointer ".windsurfrules" "Windsurf" ;;
+  esac
+done
 
 # ============================================================================
-# Step 6: Add .cursorrules and CLAUDE.md to each repo
+# Step 7: Add .ai-rules/ and agent pointer files to each repo
 # ============================================================================
 
 echo ""
-echo -e "${BLUE}Step 7: Setting up agent files in repos...${NC}"
+echo -e "${BLUE}Step 8: Setting up agent files in repos...${NC}"
 echo ""
 
 for repo_dir in "${REPO_DIRS[@]}"; do
@@ -551,29 +631,33 @@ for repo_dir in "${REPO_DIRS[@]}"; do
     REPO_STACK="a Rust project"
   fi
 
-  # Create .cursorrules if missing
-  if [ ! -f "$repo_dir/.cursorrules" ]; then
-    cat > "$repo_dir/.cursorrules" << CURSOREOF
-# ${repo_dir} — Cursor Rules
+  # --- Generate repo .ai-rules/ (always regenerated) ---
+
+  mkdir -p "$repo_dir/.ai-rules"
+
+  cat > "$repo_dir/.ai-rules/01-source-of-truth.md" << REPORULESEOF
+# Source of Truth
 
 You are an expert engineer working on ${PROJECT_NAME}. This is ${REPO_STACK}.
-
-## 1. Source of Truth
 
 The Obsidian vault at \`../${VAULT_NAME}/\` is the single source of truth for architecture, API contracts, and decisions. Always check there first before writing code.
 
 - **Architecture:** \`../${VAULT_NAME}/ARCHITECTURE.md\`
 - **API contracts:** \`../${VAULT_NAME}/API_CONTRACTS.md\` — the final authority on endpoint shapes
 - **Decisions:** \`../${VAULT_NAME}/DECISIONS.md\` — rejected approaches and why
+REPORULESEOF
 
-## 2. Decision Logic
+  cat > "$repo_dir/.ai-rules/02-decision-logic.md" << REPORULESEOF
+# Decision Logic
 
 - Before writing any code, consult \`../${VAULT_NAME}/API_CONTRACTS.md\` to ensure compatibility.
 - Before proposing an alternative approach, check \`../${VAULT_NAME}/DECISIONS.md\` — it logs rejected approaches and why they were ruled out.
 - If a requirement is unclear, check the vault for more context before asking.
 - **Live decision capture:** When an approach fails, is abandoned, or a non-obvious choice is made mid-session, immediately suggest logging it to \`../${VAULT_NAME}/DECISIONS.md\`. Before writing, run \`cd ../${VAULT_NAME} && git pull\`. Format: \`## YYYY-MM-DD — Title (by [engineer name])\` followed by two sentences. After writing, run \`cd ../${VAULT_NAME} && git add DECISIONS.md && git commit -m "decision: [title]" && git push\`.
+REPORULESEOF
 
-## 3. Contract Drift Check
+  cat > "$repo_dir/.ai-rules/03-contract-drift.md" << REPORULESEOF
+# Contract Drift Check
 
 Before pushing code, diff your changes against \`../${VAULT_NAME}/API_CONTRACTS.md\`. If any route, request/response shape, field, status code, or auth pattern has changed and the contract doesn't reflect it, stop and say:
 
@@ -583,34 +667,54 @@ Before pushing code, diff your changes against \`../${VAULT_NAME}/API_CONTRACTS.
 > 3. **Check impact first** — I'll analyze what depends on this before deciding
 
 Do not silently update the contract or push without surfacing the mismatch.
+REPORULESEOF
 
-## 4. Operator Profile
+  cat > "$repo_dir/.ai-rules/04-operator-profile.md" << REPORULESEOF
+# Operator Profile
 
 Read \`../ai-profile/\` before starting work — it contains the user's working style, code preferences, and past corrections. If you notice a behavioral pattern or the user corrects you, ask to update the profile. Never repeat a correction logged in \`../ai-profile/CORRECTIONS.md\`.
-CURSOREOF
-    echo -e "    ${GREEN}Created .cursorrules${NC}"
-  else
-    echo -e "    ${YELLOW}.cursorrules already exists — skipping${NC}"
-  fi
+REPORULESEOF
 
-  # Create CLAUDE.md if missing
-  if [ ! -f "$repo_dir/CLAUDE.md" ]; then
-    cat > "$repo_dir/CLAUDE.md" << REPOCLAUDEEOF
+  echo "$TEMPLATE_VERSION" > "$repo_dir/.ai-rules/version.txt"
+
+  echo -e "    ${GREEN}Created .ai-rules/${NC}"
+
+  # --- Generate repo agent pointer files (only if they don't exist) ---
+
+  create_repo_pointer() {
+    local file_path="$1"
+    local agent_name="$2"
+
+    if [ ! -f "$file_path" ]; then
+      cat > "$file_path" << REPOPOINTEREOF
 # ${repo_dir}
 
-> Read \`../ai-profile/\` for working style, preferences, and past corrections.
-> Architecture, API contracts, and decisions live in \`../${VAULT_NAME}/\`.
-> Check there before writing code. \`API_CONTRACTS.md\` is the final authority on endpoint shapes.
-> Before pushing, diff code changes against \`API_CONTRACTS.md\` — if they diverge, surface the mismatch and ask before proceeding.
-> This is ${REPO_STACK}.
-REPOCLAUDEEOF
-    echo -e "    ${GREEN}Created CLAUDE.md${NC}"
-  else
-    echo -e "    ${YELLOW}CLAUDE.md already exists — skipping${NC}"
-  fi
+Read and follow all instructions in \`./.ai-rules/\` before starting work.
+This is ${REPO_STACK}.
 
-  # Add .cursor/ and .gitnexus to .gitignore if not already there
+(Add any custom instructions below. This file is yours — it won't be overwritten by updates.)
+REPOPOINTEREOF
+      echo -e "    ${GREEN}Created $(basename $file_path) (${agent_name})${NC}"
+    else
+      echo -e "    ${YELLOW}$(basename $file_path) already exists — keeping it${NC}"
+    fi
+  }
+
+  for agent in "${AGENTS[@]}"; do
+    case "$agent" in
+      claude)   create_repo_pointer "$repo_dir/CLAUDE.md" "Claude Code" ;;
+      cursor)   create_repo_pointer "$repo_dir/.cursorrules" "Cursor" ;;
+      codex)    create_repo_pointer "$repo_dir/AGENTS.md" "Codex" ;;
+      windsurf) create_repo_pointer "$repo_dir/.windsurfrules" "Windsurf" ;;
+    esac
+  done
+
+  # Add .ai-rules/, .cursor/, and .gitnexus to .gitignore if not already there
   if [ -f "$repo_dir/.gitignore" ]; then
+    if ! grep -q "\.ai-rules/" "$repo_dir/.gitignore" 2>/dev/null; then
+      echo ".ai-rules/" >> "$repo_dir/.gitignore"
+      echo -e "    ${GREEN}Added .ai-rules/ to .gitignore${NC}"
+    fi
     if ! grep -q "\.cursor/" "$repo_dir/.gitignore" 2>/dev/null; then
       echo ".cursor/" >> "$repo_dir/.gitignore"
       echo -e "    ${GREEN}Added .cursor/ to .gitignore${NC}"
@@ -624,11 +728,27 @@ REPOCLAUDEEOF
 done
 
 # ============================================================================
-# Step 7: GitNexus indexing (optional)
+# Step 8: Save workspace config (for update-workspace.sh)
+# ============================================================================
+
+cat > .workspace-config << CONFIGEOF
+# Auto-generated by setup-workspace.sh — used by update-workspace.sh
+PROJECT_NAME="${PROJECT_NAME}"
+VAULT_NAME="${VAULT_NAME}"
+REPO_DIRS=($(printf '"%s" ' "${REPO_DIRS[@]}"))
+AGENTS=($(printf '"%s" ' "${AGENTS[@]}"))
+TECH_STACK="${TECH_STACK}"
+TEMPLATE_VERSION="${TEMPLATE_VERSION}"
+CONFIGEOF
+
+echo -e "${GREEN}  Saved workspace config to .workspace-config${NC}"
+
+# ============================================================================
+# Step 9: GitNexus indexing (optional)
 # ============================================================================
 
 echo ""
-echo -e "${BLUE}Step 8: GitNexus indexing (optional)...${NC}"
+echo -e "${BLUE}Step 9: GitNexus indexing (optional)...${NC}"
 echo ""
 
 if command -v gitnexus &> /dev/null; then
@@ -661,8 +781,16 @@ echo "  │   ├── PREFERENCES.md     ← Code taste and settings"
 echo "  │   └── CORRECTIONS.md     ← Behavioral corrections log"
 echo ""
 echo "  $(pwd)/"
-echo "  ├── ai-profile/            ← symlink → ~/.ai-profile/ (so Cursor can write)"
-echo "  ├── CLAUDE.md              ← Claude Code reads this every session"
+echo "  ├── .ai-rules/             ← Agent instructions (auto-updated)"
+echo "  ├── ai-profile/            ← Symlink → ~/.ai-profile/"
+for agent in "${AGENTS[@]}"; do
+  case "$agent" in
+    claude)   echo "  ├── CLAUDE.md              ← Claude Code pointer (yours to customize)" ;;
+    cursor)   echo "  ├── .cursorrules           ← Cursor pointer (yours to customize)" ;;
+    codex)    echo "  ├── AGENTS.md              ← Codex pointer (yours to customize)" ;;
+    windsurf) echo "  ├── .windsurfrules         ← Windsurf pointer (yours to customize)" ;;
+  esac
+done
 echo "  ├── ${VAULT_NAME}/"
 echo "  │   ├── ARCHITECTURE.md    ← How your system works"
 echo "  │   ├── API_CONTRACTS.md   ← Endpoint shapes"
@@ -670,8 +798,15 @@ echo "  │   ├── DECISIONS.md       ← What was tried and why"
 echo "  │   └── SESSION_LOG.md     ← Session handoff notes"
 for repo_dir in "${REPO_DIRS[@]}"; do
 echo "  ├── ${repo_dir}/"
-echo "  │   ├── .cursorrules       ← Cursor reads this"
-echo "  │   └── CLAUDE.md          ← Claude Code reads this"
+echo "  │   ├── .ai-rules/         ← Agent instructions (auto-updated)"
+for agent in "${AGENTS[@]}"; do
+  case "$agent" in
+    claude)   echo "  │   ├── CLAUDE.md          ← Claude Code pointer" ;;
+    cursor)   echo "  │   ├── .cursorrules       ← Cursor pointer" ;;
+    codex)    echo "  │   ├── AGENTS.md          ← Codex pointer" ;;
+    windsurf) echo "  │   ├── .windsurfrules     ← Windsurf pointer" ;;
+  esac
+done
 done
 echo ""
 echo -e "${BOLD}Next steps:${NC}"
@@ -684,19 +819,16 @@ echo "     cd ${VAULT_NAME} && git remote add origin <your-vault-repo-url> && gi
 echo ""
 echo "  3. Fill in ARCHITECTURE.md with how your project works"
 echo ""
-echo "  4. Start coding:"
-echo "     - Use Cursor opened in a single repo for focused edits"
-echo "     - Use Claude Code opened at the workspace root for cross-repo work"
+echo "  4. Start coding — your agents will read .ai-rules/ automatically"
 echo ""
-echo "  5. When something doesn't work or you make a non-obvious choice,"
-echo "     the AI will prompt you to log it in DECISIONS.md automatically"
+echo "  5. To update agent rules after a new release:"
+echo "     bash update-workspace.sh"
 echo ""
 echo -e "${BOLD}How it works:${NC}"
 echo ""
-echo "  AI Profile  → ~/.ai-profile/ — agents learn your style over time"
-echo "  Claude Code → reads profile → reads vault → understands you + your project"
-echo "  Cursor      → reads profile → reads .cursorrules → checks vault → writes code"
-echo "  Obsidian    → auto-commits/pulls every 1 min with author + timestamp (Git plugin)"
-echo "  DECISIONS.md → shared project memory between all engineers and agents"
-echo "  SESSION_LOG.md → picks up where the last session left off"
+echo "  AI Profile   → ~/.ai-profile/ — agents learn your style over time"
+echo "  .ai-rules/   → agent instructions — auto-updated, never edit manually"
+echo "  Pointer files → CLAUDE.md, .cursorrules, etc. — yours to customize"
+echo "  Vault         → shared project memory between all engineers and agents"
+echo "  Obsidian      → auto-commits/pulls every 1 min with author + timestamp"
 echo ""

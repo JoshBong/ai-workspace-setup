@@ -4,7 +4,7 @@
 
 **Give your AI agents a shared brain across repos.**
 
-One script sets up a multi-repo workspace where Claude Code and Cursor share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected.
+One script sets up a multi-repo workspace where your AI agents share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected. Works with Claude Code, Cursor, Codex, and Windsurf.
 
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
@@ -19,6 +19,7 @@ One script sets up a multi-repo workspace where Claude Code and Cursor share con
 - **Shared memory across engineers** — when one person discovers a dead end, every other engineer's agent knows about it within minutes via auto-syncing Obsidian.
 - **Onboard instantly** — new engineers' agents read the vault and have full project context from session one. No weeks of "how does X work?" questions.
 - **Never repeat mistakes** — failed approaches are logged automatically in `DECISIONS.md`. No one wastes time re-discovering what doesn't work.
+- **Multi-agent support** — choose which agents you use (Claude Code, Cursor, Codex, Windsurf) and get the right config files for each. No manual wiring.
 
 ---
 
@@ -37,25 +38,35 @@ You end up re-explaining context every session, wasting tokens on the same expla
 A workspace structure where AI agents automatically read shared documentation before writing any code:
 
 ```
-~/.ai-profile/               ← Global AI profile (persists across all projects)
-├── WORKING_STYLE.md         ← How you work (fills in over time)
-├── PREFERENCES.md           ← Code taste, commit style, autonomy level
-└── CORRECTIONS.md           ← Behavioral corrections log
+~/.ai-profile/               <- Global AI profile (persists across all projects)
+├── WORKING_STYLE.md
+├── PREFERENCES.md
+└── CORRECTIONS.md
 
 your-workspace/
-├── ai-profile/            ← symlink → ~/.ai-profile/ (so Cursor can write)
-├── CLAUDE.md              ← Claude Code reads this every session
-├── your-vault/            ← Obsidian vault (shared brain)
-│   ├── ARCHITECTURE.md    ← How the system works
-│   ├── API_CONTRACTS.md   ← Endpoint shapes (single source of truth)
-│   ├── DECISIONS.md       ← What was tried, what failed, and why
-│   └── SESSION_LOG.md     ← Session handoff notes
+├── .ai-rules/               <- Agent instructions (auto-updated by script)
+│   ├── 01-session-start.md
+│   ├── 02-vault-rules.md
+│   ├── 03-contract-drift.md
+│   ├── 04-profile-rules.md
+│   └── version.txt
+├── .workspace-config         <- Saved config (read by update script)
+├── ai-profile/               <- Symlink -> ~/.ai-profile/
+├── CLAUDE.md                 <- User-owned pointer (+ your custom notes)
+├── your-vault/               <- Obsidian vault (shared brain)
+│   ├── ARCHITECTURE.md
+│   ├── API_CONTRACTS.md
+│   ├── DECISIONS.md
+│   └── SESSION_LOG.md
 ├── repo-1/
-│   ├── .cursorrules       ← Cursor reads this, points to vault + profile via symlink
-│   └── CLAUDE.md          ← Claude Code reads this inside the repo
+│   ├── .ai-rules/            <- Agent instructions (auto-updated)
+│   ├── CLAUDE.md              <- User-owned pointer
+│   ├── .cursorrules           <- User-owned pointer
+│   └── AGENTS.md              <- User-owned pointer (Codex)
 └── repo-2/
-    ├── .cursorrules
-    └── CLAUDE.md
+    ├── .ai-rules/
+    ├── CLAUDE.md
+    └── .windsurfrules
 ```
 
 **The vault is the single source of truth.** Every agent reads it before suggesting code. When someone rejects an approach or makes a non-obvious choice, the agent logs it to `DECISIONS.md` in real time. The next engineer's agent reads that log on session start — no one wastes time re-discovering dead ends.
@@ -73,13 +84,43 @@ bash setup-workspace.sh
 The script prompts you for:
 1. **Project name** — names the vault and workspace
 2. **Repo URLs** — paste as many as you want (git URLs or existing folder names), press Enter when done
-3. **Project description** — one line, so the agent understands what you're building
-4. **Tech stack** — auto-detected per repo, but you can describe the overall stack
-5. **Your name** — for decision log attribution
+3. **Agents** — select which agents you use: Claude Code, Cursor, Codex, Windsurf (generates the right pointer files for each)
+4. **Project description** — one line, so the agent understands what you're building
+5. **Tech stack** — auto-detected per repo, but you can describe the overall stack
+6. **Your name** — for decision log attribution
+
+The script saves your choices to `.workspace-config` so future updates can regenerate files without re-prompting.
 
 ---
 
 ## How It Works
+
+### The Split Architecture
+
+Agent instructions are split into two layers:
+
+**`.ai-rules/` directory** (script-owned, auto-updated):
+Contains the actual rules as modular files. When you pull a new release and run `update-workspace.sh`, these files get regenerated with the latest instructions. You never need to edit these.
+
+| File | Purpose |
+|------|---------|
+| `01-session-start.md` | What to read on session start, vault workflow |
+| `02-vault-rules.md` | How to write to and maintain the vault |
+| `03-contract-drift.md` | Pre-push contract drift check logic |
+| `04-profile-rules.md` | AI profile usage and update rules |
+| `version.txt` | Tracks which release generated these rules |
+
+**Pointer files** (user-owned, never overwritten):
+Short files that tell the agent to read `.ai-rules/`. Created once during setup, then yours to customize. Add project-specific instructions, repo-specific notes, or anything else — the script will never touch them after initial creation.
+
+| File | Read by | Created when |
+|------|---------|-------------|
+| `CLAUDE.md` | Claude Code | Agent "claude" selected |
+| `.cursorrules` | Cursor | Agent "cursor" selected |
+| `AGENTS.md` | Codex | Agent "codex" selected |
+| `.windsurfrules` | Windsurf | Agent "windsurf" selected |
+
+This split means you get updated rules without losing your custom notes.
 
 ### The Three Layers
 
@@ -90,13 +131,9 @@ The script prompts you for:
 │  Working style, preferences, corrections                │
 │  Starts empty, fills in through corrections over time   │
 ├─────────────────────────────────────────────────────────┤
-│  CLAUDE CODE (workspace root)                           │
-│  Cross-repo reasoning, vault updates, architecture      │
-│  Reads: profile → CLAUDE.md → vault → understands all   │
-├─────────────────────────────────────────────────────────┤
-│  CURSOR (individual repo)                               │
-│  Focused edits, 1-5 files, fast iteration               │
-│  Reads: profile → .cursorrules → vault → writes code    │
+│  AGENT (workspace root or individual repo)              │
+│  Reads pointer file -> .ai-rules/ -> vault -> profile   │
+│  Cross-repo reasoning from root, focused edits in repo  │
 ├─────────────────────────────────────────────────────────┤
 │  OBSIDIAN VAULT (shared brain)                          │
 │  Architecture, contracts, decisions, session log        │
@@ -104,35 +141,22 @@ The script prompts you for:
 └─────────────────────────────────────────────────────────┘
 ```
 
-| Tool | Open from | Best for |
-|------|-----------|----------|
-| **Claude Code** | Workspace root | Cross-repo reasoning, vault updates, architecture decisions, debugging across boundaries |
-| **Cursor** | Individual repo | Focused feature work, UI changes, single-file fixes, fast iteration |
-
 ### Where to work from
 
-**Workspace root** — use this for cross-repo work. Claude Code reads the workspace-level `CLAUDE.md`, which points to the vault and your profile. Open your terminal here when you need to reason across repos, update architecture, or do anything that touches multiple parts of the system.
+**Workspace root** — use this for cross-repo work. Your agent reads the workspace-level pointer file (e.g., `CLAUDE.md`), which loads `.ai-rules/` and the vault. Open your terminal here when you need to reason across repos, update architecture, or do anything that touches multiple parts of the system.
 
-**Inside a single repo** — use this for focused work. Cursor reads `.cursorrules` and the repo-level `CLAUDE.md`, which both point to the vault and your profile. Open Cursor here when you're building a feature, fixing a bug, or working within one codebase.
-| **Obsidian** | Vault folder | Reading docs, manual edits, graph view of your knowledge base |
+**Inside a single repo** — use this for focused work. Your agent reads the repo-level pointer file, which loads the repo's `.ai-rules/` and the vault. Open your editor here when you're building a feature, fixing a bug, or working within one codebase.
 
 ### What each agent gets automatically
 
-**Claude Code** (opened from workspace root):
-- Reads `~/.ai-profile/` → knows your working style, preferences, and past corrections
-- Reads `CLAUDE.md` → reads vault files + session log before doing anything
-- After finishing work, prompted: *"Before we wrap up — API_CONTRACTS.md needs updating because you added an endpoint. Want me to do that now?"*
-- When an approach fails mid-session: *"That's worth logging in DECISIONS.md — tried X, failed because Y. Want me to add it now?"*
-- Before pushing, runs a contract drift check — if code diverges from `API_CONTRACTS.md`, surfaces the mismatch with three options: update the contract, revert the code, or check impact first
+All agents, regardless of which one you use, get the same core behaviors through `.ai-rules/`:
+- Reads `~/.ai-profile/` — knows your working style, preferences, and past corrections
+- Reads the vault files and session log before doing anything
+- After finishing work, prompted to update `API_CONTRACTS.md` if endpoints changed
+- When an approach fails mid-session, prompted to log it in `DECISIONS.md`
+- Before pushing, runs a contract drift check — if code diverges from `API_CONTRACTS.md`, surfaces the mismatch with options to update the contract, revert the code, or check impact first
 - When you correct its behavior, asks to log it in `CORRECTIONS.md` so it never repeats the mistake
 - At session end, offers to write a handoff note in `SESSION_LOG.md`
-
-**Cursor** (opened in a single repo):
-- Reads `~/.ai-profile/` → knows your preferences and past corrections
-- Reads `.cursorrules` → knows the tech stack, key patterns, and where the vault is
-- Checks `DECISIONS.md` before proposing alternatives
-- Logs failed approaches in real time so other engineers don't repeat them
-- Before pushing, diffs code against `API_CONTRACTS.md` and surfaces any mismatch
 
 ### The decision log
 
@@ -164,10 +188,10 @@ Every AI session starts by burning tokens on context. Without a shared vault, yo
 |--------------|------------|
 | "We're building a booking platform with Next.js frontend and FastAPI backend, they connect through proxy routes at..." (200+ tokens, every session) | Agent reads `ARCHITECTURE.md` once, already knows (0 tokens of re-explanation) |
 | "Don't use Redis, we already tried that" (50 tokens, repeated across engineers) | Agent reads `DECISIONS.md`, already knows (0 tokens) |
-| "The auth flow works like this..." (300+ tokens explaining patterns) | Agent reads `.cursorrules`, already knows the auth pattern for each role (0 tokens) |
+| "The auth flow works like this..." (300+ tokens explaining patterns) | Agent reads `.ai-rules/`, already knows the auth pattern for each role (0 tokens) |
 | Agent suggests a change, breaks the other repo, you spend 20 minutes debugging | Agent reads `API_CONTRACTS.md`, knows the exact response shape the other repo expects |
 
-**The vault front-loads context once so you never pay for it again.** Instead of re-explaining your architecture every session, the agent reads 3 markdown files and starts working immediately. Across a team of engineers running multiple sessions per day, this adds up fast.
+**The vault front-loads context once so you never pay for it again.** Instead of re-explaining your architecture every session, the agent reads the vault and starts working immediately. Across a team of engineers running multiple sessions per day, this adds up fast.
 
 The cross-repo awareness is where the real savings hit. Without a shared contract document, an agent working in your frontend has no idea what your backend expects. It guesses, gets it wrong, you debug. With `API_CONTRACTS.md`, the agent knows the exact request/response shapes across repo boundaries before writing a single line.
 
@@ -182,12 +206,12 @@ The vault isn't just documentation — it's a **live shared memory** between eve
 When Engineer A discovers something, it's available to Engineer B's agent within minutes:
 
 ```
- 10:00am  Engineer A's agent tries approach X → fails
- 10:01am  Agent prompts: "Log to DECISIONS.md?" → Yes
- 10:01am  Agent: git pull → write → commit → push
+ 10:00am  Engineer A's agent tries approach X -> fails
+ 10:01am  Agent prompts: "Log to DECISIONS.md?" -> Yes
+ 10:01am  Agent: git pull -> write -> commit -> push
  10:01am  Obsidian Git syncs on Engineer B's machine (~1 min)
  10:15am  Engineer B starts a new session
- 10:15am  Agent reads profile → vault → SESSION_LOG.md
+ 10:15am  Agent reads profile -> vault -> SESSION_LOG.md
  10:15am  Already knows X doesn't work, picks up where A left off
 ```
 
@@ -197,13 +221,13 @@ This compounds. After a few weeks, `DECISIONS.md` contains dozens of dead ends t
 
 Most teams break things at repo boundaries. Your frontend engineer changes a response shape, your backend engineer doesn't know, and the integration breaks silently.
 
-The vault prevents this because `API_CONTRACTS.md` is the single source of truth for how repos talk to each other. When Claude Code runs from the workspace root, it sees **all repos at once** and can:
+The vault prevents this because `API_CONTRACTS.md` is the single source of truth for how repos talk to each other. When an agent runs from the workspace root, it sees **all repos at once** and can:
 
 - Verify that a frontend change matches what the backend actually returns
 - Warn when an API contract change needs a corresponding update in the other repo
 - Trace data flow from one repo through the proxy layer into another
 
-Cursor, scoped to a single repo, still gets cross-repo awareness through the vault — it reads `API_CONTRACTS.md` to understand what the other repo expects without needing to open it.
+Agents scoped to a single repo still get cross-repo awareness through the vault — they read `API_CONTRACTS.md` to understand what the other repo expects without needing to open it.
 
 ### The multiplier effect
 
@@ -217,6 +241,18 @@ Cursor, scoped to a single repo, still gets cross-repo awareness through the vau
 ---
 
 ## What the Script Creates
+
+### `.ai-rules/` directory
+
+Created at the workspace root and inside each repo. Contains modular rule files that agents read via their pointer files. These are regenerated by `update-workspace.sh` and should not be hand-edited.
+
+| File | Purpose |
+|------|---------|
+| `01-session-start.md` | Session startup sequence — read vault, check session log, understand context |
+| `02-vault-rules.md` | Rules for writing to and maintaining vault files |
+| `03-contract-drift.md` | Pre-push check that diffs code against `API_CONTRACTS.md` |
+| `04-profile-rules.md` | When and how to update `~/.ai-profile/` files |
+| `version.txt` | Version tag so `update-workspace.sh` knows what to regenerate |
 
 ### Vault files
 
@@ -235,18 +271,26 @@ Cursor, scoped to a single repo, still gets cross-repo awareness through the vau
 | `PREFERENCES.md` | Code taste, commit style, response format, autonomy level | When you state a preference or an agent detects one |
 | `CORRECTIONS.md` | Behavioral corrections log — mistakes to never repeat | Automatically when you correct an agent's behavior |
 
-The profile starts empty and fills in organically. No setup questions — agents learn by working with you.
+The profile starts empty and fills in organically. No setup questions — agents learn by working with you. It's symlinked into the workspace as `./ai-profile/` so all agents (including Cursor, which can't follow paths outside the project) can read and write to it.
 
-### Per-repo agent files
+### Pointer files (per-repo)
 
-| File | Read by | Purpose |
+| File | Read by | Content |
 |------|---------|---------|
-| `.cursorrules` | Cursor | Tech stack context, vault pointers, coding patterns |
-| `CLAUDE.md` | Claude Code | Vault pointer + any repo-specific agent instructions |
+| `CLAUDE.md` | Claude Code | Short pointer to `.ai-rules/` + space for your custom notes |
+| `.cursorrules` | Cursor | Short pointer to `.ai-rules/` + space for your custom notes |
+| `AGENTS.md` | Codex | Short pointer to `.ai-rules/` + space for your custom notes |
+| `.windsurfrules` | Windsurf | Short pointer to `.ai-rules/` + space for your custom notes |
+
+Only the pointer files for agents you selected during setup are created. You can add more later by re-running setup or creating them manually — just point them to `.ai-rules/`.
+
+### `.workspace-config`
+
+Saved during setup and read by `update-workspace.sh`. Contains your project name, vault name, repo list, and selected agents. This file lets the update script regenerate `.ai-rules/` without re-prompting you for setup details.
 
 ### Auto-detected tech stacks
 
-The script reads your repo files and tailors `.cursorrules` to the right framework:
+The script reads your repo files and tailors the rules to the right framework:
 
 | Detected via | Identified as |
 |-------------|---------------|
@@ -262,13 +306,59 @@ The script reads your repo files and tailors `.cursorrules` to the right framewo
 
 ---
 
+## Updating Your Workspace
+
+When you pull a new release of this project, run the update script to get the latest agent rules:
+
+```bash
+cd my-workspace
+bash update-workspace.sh
+```
+
+This regenerates all `.ai-rules/` directories (workspace root and every repo) using the latest rule files from the release. It reads `.workspace-config` to know your project structure.
+
+**What gets updated:**
+- `.ai-rules/` contents in workspace root and all repos
+- `version.txt` inside each `.ai-rules/`
+
+**What is never touched:**
+- Pointer files (`CLAUDE.md`, `.cursorrules`, `AGENTS.md`, `.windsurfrules`) — your custom notes are safe
+- Vault contents (`ARCHITECTURE.md`, `API_CONTRACTS.md`, `DECISIONS.md`, `SESSION_LOG.md`)
+- AI profile (`~/.ai-profile/`)
+- `.workspace-config`
+
+You can run `update-workspace.sh` as often as you want. It's idempotent.
+
+---
+
+## Starting a New Project
+
+When you start a new project, run the script again in a new folder:
+
+```bash
+mkdir new-project && cd new-project
+bash setup-workspace.sh
+```
+
+The script detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
+
+Each workspace is independent. You can have as many as you want:
+
+```
+~/.ai-profile/              <- shared across everything
+~/project-alpha/             <- workspace with its own vault
+~/project-beta/              <- separate workspace, separate vault, same you
+~/freelance-client/          <- another workspace, agent still knows your style
+```
+
+---
+
 ## Obsidian Setup
 
 The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). After running the setup script:
 
-1. **Open Obsidian** → File → Open Vault → select `your-vault/`
-2. **Install the Obsidian Git plugin** → Settings → Community Plugins → Browse → search "Obsidian Git" → Install → Enable
-3. **Config is pre-set** — the setup script creates the plugin config automatically
+1. **Open Obsidian** -> File -> Open Vault -> select `your-vault/`
+2. **Obsidian Git plugin is pre-configured** — the setup script creates the plugin config automatically. Just enable Community Plugins in Obsidian settings and enable "Obsidian Git".
 
 ### Pre-configured Obsidian Git settings
 
@@ -286,7 +376,7 @@ The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). A
 Each engineer:
 1. Clones the vault repo
 2. Opens it in Obsidian
-3. Enables Obsidian Git with the settings above
+3. Enables Obsidian Git (config is already set by the setup script)
 
 The vault syncs via git. When one engineer logs a decision, every other engineer's agent sees it within 1 minute (or immediately if the agent does `git pull` before reading, which the setup configures).
 
@@ -297,29 +387,29 @@ The vault syncs via git. When one engineer logs a decision, every other engineer
 ### How multi-engineer workflows work
 
 ```
-Engineer A (Cursor, settled-web)          Engineer B (Cursor, settled-api)
-         │                                          │
-         ├─ Tries approach X                        │
-         ├─ It fails                                │
-         ├─ Agent: "Log to DECISIONS.md?"           │
-         ├─ Yes → git pull, write, commit, push     │
-         │                                          │
-         │         ┌──── vault syncs ────┐          │
-         │         │                     │          │
-         │         ▼                     ▼          │
-         │    DECISIONS.md now has:                 │
-         │    "Tried X, failed because Y"           │
-         │                                          │
-         │                     Engineer B starts new session
-         │                     Agent reads DECISIONS.md
-         │                     Already knows not to try X
+Engineer A (Cursor, settled-web)          Engineer B (Claude Code, settled-api)
+         |                                          |
+         +- Tries approach X                        |
+         +- It fails                                |
+         +- Agent: "Log to DECISIONS.md?"           |
+         +- Yes -> git pull, write, commit, push    |
+         |                                          |
+         |         +---- vault syncs ----+          |
+         |         |                     |          |
+         |         v                     v          |
+         |    DECISIONS.md now has:                  |
+         |    "Tried X, failed because Y"           |
+         |                                          |
+         |                     Engineer B starts new session
+         |                     Agent reads DECISIONS.md
+         |                     Already knows not to try X
 ```
 
 ### What each engineer needs
 
-1. Run `bash setup-workspace.sh` with the same repo URLs
+1. Run `bash setup-workspace.sh` with the same repo URLs and select their agents
 2. Open the vault in Obsidian with Obsidian Git enabled
-3. Use Cursor for focused edits, Claude Code for cross-repo work
+3. Use their preferred agent for the task at hand
 4. That's it — agents handle the rest
 
 ### Decision log attribution
@@ -331,28 +421,6 @@ Every entry includes who made the decision and when:
 ```
 
 The agent auto-fills the date and prompts for the name.
-
----
-
-## Starting a New Project
-
-When you start a new project, just run the script again in a new folder:
-
-```bash
-mkdir new-project && cd new-project
-bash setup-workspace.sh
-```
-
-The script detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
-
-Each workspace is independent. You can have as many as you want:
-
-```
-~/.ai-profile/              ← shared across everything
-~/project-alpha/             ← workspace with its own vault
-~/project-beta/              ← separate workspace, separate vault, same you
-~/freelance-client/          ← another workspace, agent still knows your style
-```
 
 ---
 
@@ -399,7 +467,7 @@ Graphify uses Claude tokens for semantic extraction. For cost-conscious runs, us
 
 ## Advanced: GitNexus (Code Intelligence)
 
-[GitNexus](https://github.com/abhigyanpatwari/GitNexus) indexes your codebase into a knowledge graph and exposes it to AI agents via MCP. It gives Cursor and Claude Code blast radius analysis, execution flow tracing, and safe multi-file renames.
+[GitNexus](https://github.com/abhigyanpatwari/GitNexus) indexes your codebase into a knowledge graph and exposes it to AI agents via MCP. It gives your agents blast radius analysis, execution flow tracing, and safe multi-file renames.
 
 ### Setup
 
@@ -449,10 +517,12 @@ claude mcp add gitnexus -- npx -y gitnexus@latest mcp
 | Requirement | Required? | Purpose |
 |------------|-----------|---------|
 | `git` | Yes | Vault sync, repo cloning |
-| `bash` | Yes | Running the setup script |
+| `bash` | Yes | Running setup and update scripts |
 | [Obsidian](https://obsidian.md/) | Yes | Opening and editing the vault |
-| [Claude Code](https://claude.ai/claude-code) | Recommended | Cross-repo AI reasoning |
-| [Cursor](https://cursor.com/) | Recommended | Focused AI-assisted editing |
+| [Claude Code](https://claude.ai/claude-code) | Optional | Cross-repo AI reasoning |
+| [Cursor](https://cursor.com/) | Optional | Focused AI-assisted editing |
+| [Codex](https://openai.com/codex) | Optional | AI coding agent |
+| [Windsurf](https://codeium.com/windsurf) | Optional | AI coding agent |
 | `npm` | Optional | For GitNexus code indexing |
 | `python3` | Optional | For Graphify structural analysis |
 
@@ -463,8 +533,20 @@ claude mcp add gitnexus -- npx -y gitnexus@latest mcp
 **Can I use this with just one repo?**
 Yes. The vault still adds value as a persistent memory layer — decisions, architecture notes, and API contracts survive between sessions.
 
-**Does this work with editors other than Cursor?**
-The vault and `CLAUDE.md` work with any tool that reads markdown. `.cursorrules` is Cursor-specific, but the same content could be adapted to Windsurf (`.windsurfrules`) or other AI editors.
+**Which agents are supported?**
+Claude Code, Cursor, Codex, and Windsurf. The setup script asks which ones you use and generates the right pointer files. You can select any combination.
+
+**What is `.ai-rules/` and should I edit it?**
+It's a directory of modular rule files that your agents read on every session start. It's managed by the setup and update scripts — don't hand-edit it. Your customizations belong in the pointer files (`CLAUDE.md`, `.cursorrules`, etc.), which are never overwritten.
+
+**How do I add a new agent later?**
+Either re-run `setup-workspace.sh` or manually create the pointer file (e.g., `.windsurfrules`) with a line telling the agent to read `.ai-rules/`. The rules themselves are agent-agnostic.
+
+**How do I get updated rules?**
+Pull the latest release, then run `bash update-workspace.sh` from your workspace root. This regenerates all `.ai-rules/` directories without touching your pointer files, vault, or profile.
+
+**What is `.workspace-config`?**
+A file saved during setup that stores your project name, vault name, repo list, and selected agents. The update script reads it so it can regenerate `.ai-rules/` without re-prompting you.
 
 **How big can DECISIONS.md get?**
 At ~100 entries (2-3 months of active development), rotate it: move the current file to `archive/DECISIONS-2024-Q1.md` and start fresh. Agents only read the current file on session start.
@@ -484,8 +566,8 @@ Not by default — it's just a local directory. You can make it a git repo if yo
 **How do I start a second project?**
 Run the script in a new folder. It detects your existing `~/.ai-profile/` and reuses it — your agent already knows your preferences from day one. The vault is fresh for the new project.
 
-**Should I work from the workspace root or inside a repo?**
-Workspace root for cross-repo work (Claude Code). Inside a repo for focused work (Cursor). Both read the vault and your profile. Use Claude Code at the root when you need to reason across boundaries, Cursor inside a repo when you're building a feature.
+**What is the contract drift check?**
+A pre-push check defined in `.ai-rules/03-contract-drift.md`. When your agent is about to push code, it diffs the code against `API_CONTRACTS.md` to catch mismatches — like when you change an endpoint response shape but forget to update the contract. The agent surfaces the mismatch and gives you options to fix it before pushing.
 
 **Can I add non-code docs to the vault?**
 Keep the vault lean. It should contain only files that help agents write better code. Business docs, pitch decks, and partner lists belong elsewhere — they dilute the signal agents read on every session start.
