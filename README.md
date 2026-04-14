@@ -12,6 +12,16 @@ One script sets up a multi-repo workspace where Claude Code and Cursor share con
 
 ---
 
+## Why Use This
+
+- **Save tokens** — stop re-explaining your architecture, auth flow, and conventions every session. The agent reads the vault once and starts working.
+- **Cross-repo awareness** — your agent sees how your frontend, backend, and database connect. It won't break one repo while fixing another.
+- **Shared memory across engineers** — when one person discovers a dead end, every other engineer's agent knows about it within minutes via auto-syncing Obsidian.
+- **Onboard instantly** — new engineers' agents read the vault and have full project context from session one. No weeks of "how does X work?" questions.
+- **Never repeat mistakes** — failed approaches are logged automatically in `DECISIONS.md`. No one wastes time re-discovering what doesn't work.
+
+---
+
 ## The Problem
 
 AI coding agents start every session with amnesia. They don't know:
@@ -20,7 +30,7 @@ AI coding agents start every session with amnesia. They don't know:
 - What conventions your team follows
 - Why you chose approach A over approach B
 
-You end up re-explaining context every session, and your agents keep suggesting things you've already rejected.
+You end up re-explaining context every session, wasting tokens on the same explanations, and your agents keep suggesting things you've already rejected. Worse — when multiple engineers work in parallel, one person's hard-won knowledge dies when their session ends. Engineer A spends an hour discovering that approach X breaks the payment flow, and an hour later Engineer B tries the exact same thing.
 
 ## The Solution
 
@@ -119,6 +129,66 @@ localStorage is vulnerable to XSS and our app handles payment data.
 Every agent reads this on session start. When Sarah's agent suggests Redis next week, it already knows why that was rejected. When a new engineer joins, their agent has the full history of architectural decisions from day one.
 
 **Entries are auto-prompted** — you don't need to remember to write them. The agent detects when you say "that didn't work", "scrap that", "let's try something else" and offers to log it.
+
+---
+
+## Why This Saves Tokens
+
+Every AI session starts by burning tokens on context. Without a shared vault, you're paying for the same context over and over:
+
+| Without vault | With vault |
+|--------------|------------|
+| "We're building a booking platform with Next.js frontend and FastAPI backend, they connect through proxy routes at..." (200+ tokens, every session) | Agent reads `ARCHITECTURE.md` once, already knows (0 tokens of re-explanation) |
+| "Don't use Redis, we already tried that" (50 tokens, repeated across engineers) | Agent reads `DECISIONS.md`, already knows (0 tokens) |
+| "The auth flow works like this..." (300+ tokens explaining patterns) | Agent reads `.cursorrules`, already knows the auth pattern for each role (0 tokens) |
+| Agent suggests a change, breaks the other repo, you spend 20 minutes debugging | Agent reads `API_CONTRACTS.md`, knows the exact response shape the other repo expects |
+
+**The vault front-loads context once so you never pay for it again.** Instead of re-explaining your architecture every session, the agent reads 3 markdown files and starts working immediately. Across a team of engineers running multiple sessions per day, this adds up fast.
+
+The cross-repo awareness is where the real savings hit. Without a shared contract document, an agent working in your frontend has no idea what your backend expects. It guesses, gets it wrong, you debug. With `API_CONTRACTS.md`, the agent knows the exact request/response shapes across repo boundaries before writing a single line.
+
+---
+
+## Why This Works for Teams
+
+The vault isn't just documentation — it's a **live shared memory** between every engineer and every agent session on your team.
+
+### Real-time knowledge sharing
+
+When Engineer A discovers something, it's available to Engineer B's agent within minutes:
+
+```
+ 10:00am  Engineer A's agent tries approach X → fails
+ 10:01am  Agent prompts: "Log to DECISIONS.md?" → Yes
+ 10:01am  Agent: git pull → write → commit → push
+ 10:02am  Obsidian Git syncs on Engineer B's machine
+ 10:15am  Engineer B starts a new session
+ 10:15am  Agent reads DECISIONS.md → already knows X doesn't work
+ 10:15am  Agent suggests approach Y instead → saves an hour of dead-end work
+```
+
+This compounds. After a few weeks, `DECISIONS.md` contains dozens of dead ends that no one on the team will ever waste time on again. New engineers get the full institutional knowledge on their first session — their agent reads the same vault and makes the same informed decisions as the most senior person on the team.
+
+### Cross-repo safety net
+
+Most teams break things at repo boundaries. Your frontend engineer changes a response shape, your backend engineer doesn't know, and the integration breaks silently.
+
+The vault prevents this because `API_CONTRACTS.md` is the single source of truth for how repos talk to each other. When Claude Code runs from the workspace root, it sees **all repos at once** and can:
+
+- Verify that a frontend change matches what the backend actually returns
+- Warn when an API contract change needs a corresponding update in the other repo
+- Trace data flow from one repo through the proxy layer into another
+
+Cursor, scoped to a single repo, still gets cross-repo awareness through the vault — it reads `API_CONTRACTS.md` to understand what the other repo expects without needing to open it.
+
+### The multiplier effect
+
+| Team size | Without vault | With vault |
+|-----------|--------------|------------|
+| 1 engineer | Re-explain context every session | Context loaded automatically |
+| 2 engineers | Same mistakes made twice, integration breaks silently | Decisions shared in real-time, contracts enforced |
+| 5 engineers | Knowledge silos, constant "how does X work?" questions | Every agent has full team knowledge from day one |
+| New hire | Weeks of onboarding, asking the same questions | Agent reads vault, productive on first session |
 
 ---
 
