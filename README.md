@@ -37,14 +37,20 @@ You end up re-explaining context every session, wasting tokens on the same expla
 A workspace structure where AI agents automatically read shared documentation before writing any code:
 
 ```
+~/.ai-profile/               ← Global AI profile (persists across all projects)
+├── WORKING_STYLE.md         ← How you work (fills in over time)
+├── PREFERENCES.md           ← Code taste, commit style, autonomy level
+└── CORRECTIONS.md           ← Behavioral corrections log
+
 your-workspace/
 ├── CLAUDE.md              ← Claude Code reads this every session
 ├── your-vault/            ← Obsidian vault (shared brain)
 │   ├── ARCHITECTURE.md    ← How the system works
 │   ├── API_CONTRACTS.md   ← Endpoint shapes (single source of truth)
-│   └── DECISIONS.md       ← What was tried, what failed, and why
+│   ├── DECISIONS.md       ← What was tried, what failed, and why
+│   └── SESSION_LOG.md     ← Session handoff notes
 ├── repo-1/
-│   ├── .cursorrules       ← Cursor reads this, points to vault
+│   ├── .cursorrules       ← Cursor reads this, points to vault + profile
 │   └── CLAUDE.md          ← Claude Code reads this inside the repo
 └── repo-2/
     ├── .cursorrules
@@ -78,16 +84,21 @@ The script prompts you for:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│  AI PROFILE (~/.ai-profile/)                            │
+│  Global — persists across all projects                  │
+│  Working style, preferences, corrections                │
+│  Starts empty, fills in through corrections over time   │
+├─────────────────────────────────────────────────────────┤
 │  CLAUDE CODE (workspace root)                           │
 │  Cross-repo reasoning, vault updates, architecture      │
-│  Reads: CLAUDE.md → vault files → understands everything│
+│  Reads: profile → CLAUDE.md → vault → understands all   │
 ├─────────────────────────────────────────────────────────┤
 │  CURSOR (individual repo)                               │
 │  Focused edits, 1-5 files, fast iteration               │
-│  Reads: .cursorrules → checks vault → writes code       │
+│  Reads: profile → .cursorrules → vault → writes code    │
 ├─────────────────────────────────────────────────────────┤
 │  OBSIDIAN VAULT (shared brain)                          │
-│  Architecture, contracts, decisions                     │
+│  Architecture, contracts, decisions, session log        │
 │  Auto-commits/pulls every 1 min with author + timestamp │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -101,12 +112,16 @@ The script prompts you for:
 ### What each agent gets automatically
 
 **Claude Code** (opened from workspace root):
-- Reads `CLAUDE.md` → told to read all three vault files before doing anything
+- Reads `~/.ai-profile/` → knows your working style, preferences, and past corrections
+- Reads `CLAUDE.md` → reads vault files + session log before doing anything
 - After finishing work, prompted: *"Before we wrap up — API_CONTRACTS.md needs updating because you added an endpoint. Want me to do that now?"*
 - When an approach fails mid-session: *"That's worth logging in DECISIONS.md — tried X, failed because Y. Want me to add it now?"*
 - Before pushing, runs a contract drift check — if code diverges from `API_CONTRACTS.md`, surfaces the mismatch with three options: update the contract, revert the code, or check impact first
+- When you correct its behavior, asks to log it in `CORRECTIONS.md` so it never repeats the mistake
+- At session end, offers to write a handoff note in `SESSION_LOG.md`
 
 **Cursor** (opened in a single repo):
+- Reads `~/.ai-profile/` → knows your preferences and past corrections
 - Reads `.cursorrules` → knows the tech stack, key patterns, and where the vault is
 - Checks `DECISIONS.md` before proposing alternatives
 - Logs failed approaches in real time so other engineers don't repeat them
@@ -163,10 +178,10 @@ When Engineer A discovers something, it's available to Engineer B's agent within
  10:00am  Engineer A's agent tries approach X → fails
  10:01am  Agent prompts: "Log to DECISIONS.md?" → Yes
  10:01am  Agent: git pull → write → commit → push
- 10:02am  Obsidian Git syncs on Engineer B's machine
+ 10:01am  Obsidian Git syncs on Engineer B's machine (~1 min)
  10:15am  Engineer B starts a new session
- 10:15am  Agent reads DECISIONS.md → already knows X doesn't work
- 10:15am  Agent suggests approach Y instead → saves an hour of dead-end work
+ 10:15am  Agent reads profile → vault → SESSION_LOG.md
+ 10:15am  Already knows X doesn't work, picks up where A left off
 ```
 
 This compounds. After a few weeks, `DECISIONS.md` contains dozens of dead ends that no one on the team will ever waste time on again. New engineers get the full institutional knowledge on their first session — their agent reads the same vault and makes the same informed decisions as the most senior person on the team.
@@ -203,6 +218,17 @@ Cursor, scoped to a single repo, still gets cross-repo awareness through the vau
 | `ARCHITECTURE.md` | How your system works — repos, data flow, key structures | When you add a service, change how repos connect, or discover a structural gap |
 | `API_CONTRACTS.md` | Every endpoint shape — request, response, errors | When any endpoint changes. This file is the final authority. |
 | `DECISIONS.md` | Rejected approaches and non-obvious choices | Automatically prompted by agents mid-session |
+| `SESSION_LOG.md` | Two-line session handoff notes | At the end of each session, so the next one picks up where you left off |
+
+### Global AI profile (`~/.ai-profile/`)
+
+| File | Purpose | When to update |
+|------|---------|----------------|
+| `WORKING_STYLE.md` | How you prefer to work — communication, pacing, decision-making | Agents ask to add entries when they notice patterns |
+| `PREFERENCES.md` | Code taste, commit style, response format, autonomy level | When you state a preference or an agent detects one |
+| `CORRECTIONS.md` | Behavioral corrections log — mistakes to never repeat | Automatically when you correct an agent's behavior |
+
+The profile starts empty and fills in organically. No setup questions — agents learn by working with you.
 
 ### Per-repo agent files
 
@@ -416,6 +442,15 @@ At ~100 entries (2-3 months of active development), rotate it: move the current 
 
 **What if two engineers update DECISIONS.md at the same time?**
 The setup configures agents to `git pull` before writing and `git push` immediately after. If a conflict still happens, it's a simple text merge — entries are independent blocks.
+
+**What is the AI profile?**
+A global directory at `~/.ai-profile/` that stores how you work — your preferences, working style, and behavioral corrections. It starts empty and fills in over time as agents learn your patterns. Unlike the vault (which is project-specific), the profile follows you across all projects.
+
+**Do I need to fill in the profile manually?**
+No. It starts blank. As you work with agents and correct their behavior, they'll ask to log those corrections and preferences. After a few sessions, the profile reflects how you actually work — not how you think you work.
+
+**Does the profile sync between machines?**
+Not by default — it's just a local directory. You can make it a git repo if you want to sync it, but it's personal (not shared with a team), so local-only is fine for most people.
 
 **Can I add non-code docs to the vault?**
 Keep the vault lean. It should contain only files that help agents write better code. Business docs, pitch decks, and partner lists belong elsewhere — they dilute the signal agents read on every session start.

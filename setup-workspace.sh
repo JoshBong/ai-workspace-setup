@@ -47,6 +47,55 @@ echo ""
 WORKSPACE_DIR=$(pwd)
 
 # ============================================================================
+# Step 0: Create global AI profile (once, ever)
+# ============================================================================
+
+AI_PROFILE_DIR="$HOME/.ai-profile"
+
+if [ ! -d "$AI_PROFILE_DIR" ]; then
+  echo -e "${BLUE}Setting up your global AI profile...${NC}"
+  echo ""
+  mkdir -p "$AI_PROFILE_DIR"
+
+  cat > "$AI_PROFILE_DIR/WORKING_STYLE.md" << 'PROFILEEOF'
+# Working Style
+
+> How you prefer to work with AI agents. This file is empty on purpose —
+> it fills in over time as agents learn your patterns.
+> When an agent notices a preference, it will ask to log it here.
+
+(No entries yet. Your agents will learn as you work together.)
+PROFILEEOF
+
+  cat > "$AI_PROFILE_DIR/PREFERENCES.md" << 'PROFILEEOF'
+# Preferences
+
+> Code taste, commit style, response format, autonomy level.
+> Starts empty — agents will ask to add entries when they notice patterns
+> or when you correct their behavior.
+
+(No entries yet. Your agents will learn as you work together.)
+PROFILEEOF
+
+  cat > "$AI_PROFILE_DIR/CORRECTIONS.md" << 'PROFILEEOF'
+# Corrections Log
+
+> Reverse-chronological log of behavioral corrections.
+> When you tell an agent "don't do that" or "actually I want it this way,"
+> it logs the correction here and updates the relevant profile file.
+> Format: ## YYYY-MM-DD — Short description
+
+(No entries yet.)
+PROFILEEOF
+
+  echo -e "${GREEN}  Created ~/.ai-profile/ — starts empty, fills in as you work${NC}"
+  echo ""
+else
+  echo -e "${GREEN}  Found existing AI profile at ~/.ai-profile/ — keeping it${NC}"
+  echo ""
+fi
+
+# ============================================================================
 # Step 1: Get project info
 # ============================================================================
 
@@ -270,7 +319,19 @@ cat > "$VAULT_NAME/DECISIONS.md" << EOF
 Set up AI-augmented workspace with Obsidian vault as shared brain, CLAUDE.md for session context, and .cursorrules per repo. Vault is the single source of truth — agents read it before writing code.
 EOF
 
-echo -e "${GREEN}  Created ${VAULT_NAME}/ with ARCHITECTURE.md, API_CONTRACTS.md, DECISIONS.md${NC}"
+# SESSION_LOG.md
+cat > "$VAULT_NAME/SESSION_LOG.md" << 'EOF'
+# Session Log
+
+> Two-line handoff notes at the end of each session.
+> Helps the next session pick up where the last one left off.
+> Format: ## YYYY-MM-DD — Session summary (by [name])
+> Line 1: What was done. Line 2: Where things left off / what's next.
+
+(No sessions logged yet.)
+EOF
+
+echo -e "${GREEN}  Created ${VAULT_NAME}/ with ARCHITECTURE.md, API_CONTRACTS.md, DECISIONS.md, SESSION_LOG.md${NC}"
 
 # Init git in vault
 cd "$VAULT_NAME"
@@ -302,15 +363,26 @@ done
 cat > CLAUDE.md << CLAUDEEOF
 # ${PROJECT_NAME} Workspace
 
-## On Session Start — Read These First
+## On Every Session — Read Your Operator
 
-Before doing anything else, read these vault files in order:
+Before reading the vault, read these files to understand who you're working with:
+
+1. \`~/.ai-profile/WORKING_STYLE.md\` — how this person works and communicates
+2. \`~/.ai-profile/PREFERENCES.md\` — code taste, commit style, autonomy level
+3. \`~/.ai-profile/CORRECTIONS.md\` — past behavioral corrections; never repeat these
+
+---
+
+## Then Read the Vault
+
+Read these vault files before doing anything else:
 
 1. \`./${VAULT_NAME}/ARCHITECTURE.md\` — system design and how repos connect
 2. \`./${VAULT_NAME}/API_CONTRACTS.md\` — endpoint shapes (the final authority)
 3. \`./${VAULT_NAME}/DECISIONS.md\` — rejected approaches and why; check before proposing alternatives
+4. \`./${VAULT_NAME}/SESSION_LOG.md\` — where the last session left off
 
-Do not suggest code changes until you have read all three.
+Do not suggest code changes until you have read all of the above.
 
 ---
 
@@ -393,6 +465,26 @@ Do NOT silently update the contract. Do NOT silently push. Surface it, present t
 When a trigger fires, proactively say: *"Before we wrap up — [specific file] needs updating because [reason]. Want me to do that now?"*
 
 Do not silently skip it. Do not update the vault without confirming with the user first.
+
+---
+
+## Profile Update Rules
+
+### Update \`~/.ai-profile/CORRECTIONS.md\` when:
+- The user corrects your behavior (e.g., "stop doing X", "don't do that", "I told you already")
+- Format: \`## YYYY-MM-DD — Short description\` followed by one sentence
+- Then update the relevant profile file (\`WORKING_STYLE.md\` or \`PREFERENCES.md\`) to reflect the correction
+
+### Update \`~/.ai-profile/WORKING_STYLE.md\` or \`PREFERENCES.md\` when:
+- You notice a consistent pattern (e.g., user always discusses before coding)
+- The user states a preference explicitly (e.g., "I like conventional commits")
+- A correction changes a previously recorded preference
+- Always ask first: *"I noticed [pattern]. Want me to add that to your profile?"*
+
+### Update \`SESSION_LOG.md\` at session end:
+- When the user says "done", "that's it", "ship it", or ends the session
+- Say: *"Want me to log a session handoff note so the next session knows where we left off?"*
+- Format: \`## YYYY-MM-DD — Summary (by [name])\` followed by two lines max
 
 ---
 
@@ -484,6 +576,10 @@ Before pushing code, diff your changes against \`../${VAULT_NAME}/API_CONTRACTS.
 > 3. **Check impact first** — I'll analyze what depends on this before deciding
 
 Do not silently update the contract or push without surfacing the mismatch.
+
+## 4. Operator Profile
+
+Read \`~/.ai-profile/\` before starting work — it contains the user's working style, code preferences, and past corrections. If you notice a behavioral pattern or the user corrects you, ask to update the profile. Never repeat a correction logged in \`~/.ai-profile/CORRECTIONS.md\`.
 CURSOREOF
     echo -e "    ${GREEN}Created .cursorrules${NC}"
   else
@@ -495,6 +591,7 @@ CURSOREOF
     cat > "$repo_dir/CLAUDE.md" << REPOCLAUDEEOF
 # ${repo_dir}
 
+> Read \`~/.ai-profile/\` for working style, preferences, and past corrections.
 > Architecture, API contracts, and decisions live in \`../${VAULT_NAME}/\`.
 > Check there before writing code. \`API_CONTRACTS.md\` is the final authority on endpoint shapes.
 > Before pushing, diff code changes against \`API_CONTRACTS.md\` — if they diverge, surface the mismatch and ask before proceeding.
@@ -551,12 +648,18 @@ echo -e "${BOLD}============================================${NC}"
 echo ""
 echo "Your workspace:"
 echo ""
+echo "  ~/.ai-profile/               ← Global AI profile (learns over time)"
+echo "  │   ├── WORKING_STYLE.md   ← How you work"
+echo "  │   ├── PREFERENCES.md     ← Code taste and settings"
+echo "  │   └── CORRECTIONS.md     ← Behavioral corrections log"
+echo ""
 echo "  $(pwd)/"
 echo "  ├── CLAUDE.md              ← Claude Code reads this every session"
 echo "  ├── ${VAULT_NAME}/"
 echo "  │   ├── ARCHITECTURE.md    ← How your system works"
 echo "  │   ├── API_CONTRACTS.md   ← Endpoint shapes"
-echo "  │   └── DECISIONS.md       ← What was tried and why"
+echo "  │   ├── DECISIONS.md       ← What was tried and why"
+echo "  │   └── SESSION_LOG.md     ← Session handoff notes"
 for repo_dir in "${REPO_DIRS[@]}"; do
 echo "  ├── ${repo_dir}/"
 echo "  │   ├── .cursorrules       ← Cursor reads this"
@@ -582,8 +685,10 @@ echo "     the AI will prompt you to log it in DECISIONS.md automatically"
 echo ""
 echo -e "${BOLD}How it works:${NC}"
 echo ""
-echo "  Claude Code → reads CLAUDE.md → reads vault → understands your project"
-echo "  Cursor      → reads .cursorrules → checks vault → writes code correctly"
+echo "  AI Profile  → ~/.ai-profile/ — agents learn your style over time"
+echo "  Claude Code → reads profile → reads vault → understands you + your project"
+echo "  Cursor      → reads profile → reads .cursorrules → checks vault → writes code"
 echo "  Obsidian    → auto-commits/pulls every 1 min with author + timestamp (Git plugin)"
-echo "  DECISIONS.md → shared memory between all engineers and agents"
+echo "  DECISIONS.md → shared project memory between all engineers and agents"
+echo "  SESSION_LOG.md → picks up where the last session left off"
 echo ""
