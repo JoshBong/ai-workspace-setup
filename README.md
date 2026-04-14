@@ -60,8 +60,6 @@ The script prompts you for:
 4. **Tech stack** — auto-detected per repo, but you can describe the overall stack
 5. **Your name** — for decision log attribution
 
-That's it. Everything is created, wired up, and ready.
-
 ---
 
 ## How It Works
@@ -70,17 +68,17 @@ That's it. Everything is created, wired up, and ready.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  CLAUDE CODE (workspace root)                            │
-│  Cross-repo reasoning, vault updates, architecture       │
-│  Reads: CLAUDE.md → vault files → understands everything │
+│  CLAUDE CODE (workspace root)                           │
+│  Cross-repo reasoning, vault updates, architecture      │
+│  Reads: CLAUDE.md → vault files → understands everything│
 ├─────────────────────────────────────────────────────────┤
-│  CURSOR (individual repo)                                │
-│  Focused edits, 1-5 files, fast iteration                │
-│  Reads: .cursorrules → checks vault → writes code        │
+│  CURSOR (individual repo)                               │
+│  Focused edits, 1-5 files, fast iteration               │
+│  Reads: .cursorrules → checks vault → writes code       │
 ├─────────────────────────────────────────────────────────┤
-│  OBSIDIAN VAULT (shared brain)                           │
-│  Architecture, contracts, decisions                       │
-│  Auto-syncs via Obsidian Git plugin every 5 minutes      │
+│  OBSIDIAN VAULT (shared brain)                          │
+│  Architecture, contracts, decisions                     │
+│  Auto-syncs via Obsidian Git plugin every 5 minutes     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -202,7 +200,7 @@ Engineer A (Cursor, settled-web)          Engineer B (Cursor, settled-api)
          │         ┌──── vault syncs ────┐          │
          │         │                     │          │
          │         ▼                     ▼          │
-         │    DECISIONS.md now has:                  │
+         │    DECISIONS.md now has:                 │
          │    "Tried X, failed because Y"           │
          │                                          │
          │                     Engineer B starts new session
