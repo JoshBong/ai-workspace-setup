@@ -37,6 +37,13 @@ async function runAdd(repos, opts) {
   const workspaceDir = process.cwd();
   let added = 0;
 
+  // Warn early if vault is missing
+  const vaultDir = path.join(workspaceDir, vaultName);
+  if (!fs.existsSync(vaultDir)) {
+    log.warn(`Vault '${vaultName}' not found — MOC.md and SESSION_LOG.md will not be updated.`);
+    log.warn(`Run 'devnexus init' first if this is a new workspace.`);
+  }
+
   for (const repo of repos) {
     const isUrl = repo.startsWith('http') || repo.startsWith('git@');
     const dirName = isUrl ? path.basename(repo, '.git') : repo;
@@ -129,9 +136,6 @@ async function runAdd(repos, opts) {
       }
     } catch { /* not installed, skip silently */ }
 
-    // Graphify prompt — workspace level
-    await promptAndRunGraphify(workspaceDir, vaultName, agents);
-
     // Update MOC.md
     const mocPath = path.join(workspaceDir, vaultName, 'MOC.md');
     if (fs.existsSync(mocPath)) {
@@ -168,5 +172,10 @@ async function runAdd(repos, opts) {
     config.repos = existingRepos;
     writeConfig(config);
     log.success(`Updated .workspace-config (${existingRepos.length} repos total)`);
+  }
+
+  // Graphify — once after all repos are processed
+  if (added > 0) {
+    await promptAndRunGraphify(workspaceDir, vaultName, agents);
   }
 }

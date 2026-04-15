@@ -15,9 +15,9 @@ export function createSymlink(target, linkPath) {
 
 export function addToGitignore(repoDir, entries) {
   const gitignorePath = path.join(repoDir, '.gitignore');
-  if (!fs.existsSync(gitignorePath)) return [];
-
-  let content = fs.readFileSync(gitignorePath, 'utf-8');
+  let content = fs.existsSync(gitignorePath)
+    ? fs.readFileSync(gitignorePath, 'utf-8')
+    : '';
   const added = [];
 
   for (const entry of entries) {

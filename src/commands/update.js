@@ -6,7 +6,7 @@ import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { ensureDir, writeFile } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION } from '../constants.js';
-import { installContractHook } from '../lib/hooks.js';
+import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 
@@ -142,5 +142,10 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack }) {
   const hookResult = installContractHook(absRepoDir, vaultName);
   if (hookResult.installed) {
     log.success(`${path.basename(absRepoDir)}: contract drift hook ${hookResult.updated ? 'updated' : 'installed'}`);
+  }
+
+  const gnHookResult = installGitNexusHook(absRepoDir);
+  if (gnHookResult.installed) {
+    log.success(`${path.basename(absRepoDir)}: GitNexus hook ${gnHookResult.updated ? 'updated' : 'installed'}`);
   }
 }
