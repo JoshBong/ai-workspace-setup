@@ -130,7 +130,7 @@ async function runAdd(repos, opts) {
     } catch { /* not installed, skip silently */ }
 
     // Graphify prompt — workspace level
-    await promptAndRunGraphify(workspaceDir, vaultName);
+    await promptAndRunGraphify(workspaceDir, vaultName, agents);
 
     // Update MOC.md
     const mocPath = path.join(workspaceDir, vaultName, 'MOC.md');

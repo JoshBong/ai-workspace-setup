@@ -155,7 +155,7 @@ async function runInit(opts) {
 
   // Step 10: Graphify — workspace-level structural analysis
   log.step('Step 10', 'Graphify — workspace structural analysis');
-  await promptAndRunGraphify(workspaceDir, vaultName);
+  await promptAndRunGraphify(workspaceDir, vaultName, agents);
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
@@ -441,7 +441,11 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  console.log('  4. Generate GRAPH_REPORT.md: open Claude Code and type /graphify .');
+  const graphifyHint = agents.includes('claude') ? 'In Claude Code, type /graphify .'
+    : agents.includes('cursor') ? 'In Cursor, ask: "run graphify on this workspace"'
+    : agents.includes('codex') ? 'In Codex, ask: "run graphify on this workspace"'
+    : 'Ask your agent to run graphify to generate GRAPH_REPORT.md';
+  console.log(`  4. Generate GRAPH_REPORT.md: ${graphifyHint}`);
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
   console.log("  6. To update rules after a new release: devnexus update\n");
 }

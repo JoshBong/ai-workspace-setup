@@ -10,7 +10,7 @@ export function graphifyCommand() {
       try {
         const config = requireConfig();
         const workspaceDir = process.cwd();
-        await promptAndRunGraphify(workspaceDir, config.vaultName);
+        await promptAndRunGraphify(workspaceDir, config.vaultName, config.agents || []);
       } catch (err) {
         log.error(err.message);
         process.exit(1);
