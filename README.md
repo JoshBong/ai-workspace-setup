@@ -2,9 +2,11 @@
 
 # devnexus
 
-**Give your AI agents a shared brain across repos.**
+**Your agents start every session with amnesia. devnexus fixes that.**
 
-One command sets up a multi-repo workspace where your agents share context through an Obsidian vault — decisions, architecture, and API contracts — so they never start from scratch.
+One command. Shared brain across repos, sessions, and engineers. Decisions survive, context compounds, no one re-discovers dead ends.
+
+Multi-dev AI engineering made easy.
 
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
@@ -43,16 +45,17 @@ your-workspace/
 
 ## Why
 
-AI agents start every session with amnesia. They don't know what you tried yesterday, how your repos connect, or why you chose approach A over B. You end up re-explaining the same context every session — and when multiple engineers work in parallel, one person's hard-won discovery dies when their session ends.
+When one engineer's agent discovers that approach X doesn't work, that knowledge dies when the session ends. The next engineer — or the same engineer tomorrow — wastes time re-discovering the same dead end.
 
-devnexus gives agents a vault they read before writing any code. When someone rejects an approach, the agent logs it to `DECISIONS.md`. The next engineer's agent reads it on session start. No one wastes time re-discovering dead ends.
+devnexus gives every agent a vault they read before writing any code. Decisions, architecture, and API contracts persist across sessions and engineers. Context compounds instead of resetting.
 
 **What agents get automatically:**
-- **Context from day one** — reads `~/.ai-profile/` (your style, preferences, corrections) + vault files before doing anything
+- **Shared memory** — decisions, architecture, and contracts survive across sessions and engineers
 - **Cross-repo awareness** — sees how frontend, backend, and database connect through `API_CONTRACTS.md`
 - **Decision history** — reads every rejected approach in `DECISIONS.md` before suggesting anything
 - **Contract enforcement** — pre-push git hook blocks pushes when API dirs change without updating `API_CONTRACTS.md`
 - **Session continuity** — reads `SESSION_LOG.md` to pick up exactly where the last session left off
+- **Personal profile** — reads `~/.ai-profile/` for your style, preferences, and past corrections
 
 ---
 
@@ -77,78 +80,29 @@ devnexus agent rm <agent>         remove an agent
 
 ## How It Works
 
-### Two-layer agent instructions
+devnexus sets up two things: a **vault** (shared brain) and **agent rules** (instructions that tell your agents how to use it).
 
-**`.ai-rules/`** (script-owned, auto-updated by `devnexus update`):
+**On `devnexus init`:**
+1. Creates an Obsidian vault with structured files for architecture, API contracts, decisions, and session handoffs
+2. Generates `.ai-rules/` in each repo — agent instructions that are auto-updated by `devnexus update` (you never edit these)
+3. Creates pointer files (`CLAUDE.md`, `.cursorrules`, etc.) for each configured agent — yours to customize, never overwritten
+4. Installs git hooks for contract drift detection
+5. Indexes repos with GitNexus (if installed) for code intelligence
 
-Workspace root:
+**On every agent session:**
+1. Agent reads pointer file → loads `.ai-rules/` → reads vault
+2. Knows the architecture, API contracts, and rejected approaches before writing any code
+3. Picks up where the last session left off via `SESSION_LOG.md`
 
-| File | Purpose |
-|------|---------|
-| `01-session-start.md` | What to read on session start, GitNexus enforcement |
-| `02-vault-rules.md` | How to write to and maintain vault files |
-| `03-contract-drift.md` | Pre-push contract drift check logic |
-| `04-profile-rules.md` | When and how to update `~/.ai-profile/` |
-| `version.txt` | Tracks which release generated these rules |
+**The decision log** is the core loop. When an agent rejects an approach or makes a non-obvious choice, it logs to `DECISIONS.md`. The next session — yours or a teammate's — already knows. No re-discovery.
 
-Each repo:
+### What's yours vs. what's managed
 
-| File | Purpose |
-|------|---------|
-| `01-source-of-truth.md` | Vault as authority for architecture, contracts, decisions |
-| `02-decision-logic.md` | When and how to write to `DECISIONS.md` |
-| `03-contract-drift.md` | Pre-push contract drift check logic |
-| `04-operator-profile.md` | Reading and updating `~/.ai-profile/` |
-| `05-code-intelligence.md` | GitNexus enforcement — impact analysis before any edit |
-| `version.txt` | Tracks which release generated these rules |
-
-**Pointer files** (yours — never overwritten). Created for each agent you configure:
-
-| File | Agent |
-|------|-------|
-| `CLAUDE.md` | Claude Code |
-| `.cursorrules` | Cursor |
-| `AGENTS.md` | Codex |
-| `.windsurfrules` | Windsurf |
-
-This split means you get updated rules without losing your custom notes.
-
-### Three layers
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  AI PROFILE (~/.ai-profile/)                            │
-│  Global — persists across all projects                  │
-│  Working style, preferences, corrections                │
-├─────────────────────────────────────────────────────────┤
-│  AGENT (workspace root or individual repo)              │
-│  Reads pointer → .ai-rules/ → vault → profile           │
-├─────────────────────────────────────────────────────────┤
-│  OBSIDIAN VAULT (shared brain)                          │
-│  Architecture, contracts, decisions, session log        │
-│  Auto-commits/pulls every 1 min via Obsidian Git        │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Where to work from
-
-**Workspace root** — cross-repo work. Agent reads workspace-level pointer, loads `.ai-rules/` + vault. Use this for anything that touches multiple repos.
-
-**Inside a repo** — focused work. Agent reads repo-level pointer, still reads the vault. Use this for features and bug fixes within one codebase.
-
-### The decision log
-
-`DECISIONS.md` is a reverse-chronological log of rejected approaches and non-obvious choices:
-
-```markdown
-## 2024-03-15 — Rejected Redis for caching (by Sarah)
-
-Evaluated Redis for API response caching. Rejected because our Supabase plan
-includes edge caching and adding Redis doubles infrastructure cost for marginal
-latency improvement.
-```
-
-Agents read this on session start. When Sarah's agent suggests Redis next week, it already knows why that was rejected. Entries are auto-prompted — you don't need to remember to write them.
+| | Yours — edit freely | Managed — don't touch |
+|-|--------------------|-----------------------|
+| Agent config | Pointer files (`CLAUDE.md`, `.cursorrules`, `AGENTS.md`, `.windsurfrules`) | `.ai-rules/` (regenerated by `devnexus update`) |
+| Vault | All vault files — architecture, contracts, decisions | — |
+| Git hooks | — | `.git/hooks/pre-push` (reinstalled by `devnexus update`) |
 
 ---
 
@@ -177,33 +131,32 @@ Starts empty, fills in organically as agents learn how you work. Symlinked into 
 
 ---
 
-## Token Savings
+## Without devnexus vs. with devnexus
 
-| Without vault | With vault |
-|--------------|------------|
-| Re-explain architecture every session (200+ tokens) | Agent reads `ARCHITECTURE_OVERVIEW.md` once, 0 re-explanation |
-| "Don't use Redis, we tried that" (50 tokens, repeated) | Agent reads `DECISIONS.md`, already knows |
-| Agent guesses API shape, gets it wrong, you debug | Agent reads `API_CONTRACTS.md`, knows exact response shapes |
+| Without | With |
+|---------|------|
+| Re-explain architecture every session | Agent reads `ARCHITECTURE_OVERVIEW.md` — 0 re-explanation |
+| "Don't use Redis, we tried that" — repeated every session | Agent reads `DECISIONS.md`, already knows |
+| Agent guesses API shape, gets it wrong, you debug | Agent reads `API_CONTRACTS.md`, knows exact shapes |
+| New teammate's agent has no context | Agent reads vault, productive immediately |
 
 ---
 
 ## For Teams
 
-When Engineer A discovers something, it's available to Engineer B's agent within minutes:
+One engineer's discovery is every engineer's context — within minutes, not meetings.
 
 ```
 10:00am  Engineer A's agent tries approach X → fails
-10:01am  Agent: "Log to DECISIONS.md?" → Yes → git push
+10:01am  Agent logs to DECISIONS.md → git push
 10:01am  Obsidian Git syncs on Engineer B's machine (~1 min)
-10:15am  Engineer B starts a new session
-10:15am  Agent reads vault → already knows X doesn't work
+10:15am  Engineer B starts a new session → agent already knows X doesn't work
 ```
 
-| Team size | Without vault | With vault |
-|-----------|--------------|------------|
-| 1 engineer | Re-explain context every session | Context loaded automatically |
-| 2 engineers | Same mistakes made twice | Decisions shared in real-time |
-| 5 engineers | Knowledge silos, constant "how does X work?" | Every agent has full team knowledge |
+| Team size | Without devnexus | With devnexus |
+|-----------|-----------------|---------------|
+| 1 engineer | Re-explain context every session | Context compounds automatically |
+| 2-5 engineers | Same mistakes made twice, knowledge silos | Decisions shared in real-time |
 | New hire | Weeks of onboarding | Agent reads vault, productive on day one |
 
 ---

@@ -1,7 +1,7 @@
 {
   "name": "devnexus",
   "version": "1.2.1",
-  "description": "CLI tool for setting up AI-augmented workspaces with Obsidian vault integration",
+  "description": "Give your AI agents a shared brain across repos. Multi-dev AI engineering made easy.",
   "type": "module",
   "bin": {
     "devnexus": "./bin/devnexus.js"
@@ -17,12 +17,22 @@
   ],
   "keywords": [
     "ai",
+    "agent",
     "workspace",
     "obsidian",
+    "vault",
     "claude",
     "cursor",
     "codex",
     "windsurf",
+    "opencode",
+    "mcp",
+    "multi-repo",
+    "multi-dev",
+    "shared-brain",
+    "session-memory",
+    "decision-log",
+    "context",
     "developer-tools"
   ],
   "author": "Joshua Huang",
