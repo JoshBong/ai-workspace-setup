@@ -18,6 +18,7 @@ import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
 import { installContractHook } from '../lib/hooks.js';
+import { promptAndRunGraphify } from '../lib/graphify.js';
 
 export function initCommand() {
   const cmd = new Command('init')
@@ -114,7 +115,7 @@ async function runInit(opts) {
 
   // Step 3: Create Obsidian vault
   log.step('Step 3', `Creating Obsidian vault (${vaultName})`);
-  createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir });
+  createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir, repos: repoDirs });
 
   // Step 4: Create workspace .ai-rules/
   log.step('Step 4', 'Creating workspace agent rules');
@@ -152,8 +153,14 @@ async function runInit(opts) {
   // Step 9: Register vault in vault-map.json (for vault-encoder hook)
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
 
-  // Step 10: Graphify instructions
-  printGraphifyInstructions(vaultName);
+  // Step 10: Graphify — prompt per repo
+  if (repoDirs.length > 0) {
+    log.step('Step 10', 'Graphify — structural codebase analysis');
+    for (const repoDir of repoDirs) {
+      const absRepoDir = path.join(workspaceDir, repoDir);
+      await promptAndRunGraphify(repoDir, absRepoDir, vaultName);
+    }
+  }
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
@@ -203,7 +210,7 @@ async function setupRepo(repo, workspaceDir, shouldClone) {
   }
 }
 
-function createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir }) {
+function createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir, repos }) {
   const vaultDir = path.join(workspaceDir, vaultName);
 
   ensureDir(vaultDir);
@@ -220,8 +227,7 @@ function createVault({ vaultName, projectName, description, techStack, author, d
   writeFile(path.join(vaultDir, '.gitignore'), obsidianTemplates.vaultGitignore());
 
   // Vault content
-  const repos = []; // populated later — MOC updated post-clone
-  writeFile(path.join(vaultDir, 'MOC.md'), vaultTemplates.moc({ projectName, vaultName, repos, date }));
+  writeFile(path.join(vaultDir, 'MOC.md'), vaultTemplates.moc({ projectName, vaultName, repos: repos || [], date }));
   writeFile(path.join(vaultDir, 'ARCHITECTURE_OVERVIEW.md'), vaultTemplates.architecture({ projectName, description, techStack, date }));
   writeFile(path.join(vaultDir, 'API_CONTRACTS.md'), vaultTemplates.apiContracts({ date }));
   writeFile(path.join(vaultDir, 'DECISIONS.md'), vaultTemplates.decisions({ date, author }));
@@ -373,21 +379,6 @@ function registerVaultMap(vaultName, vaultAbsPath) {
   }
 }
 
-function printGraphifyInstructions(vaultName) {
-  console.log('');
-  log.step('Step 10', 'Graphify — structural codebase analysis (optional)');
-  log.plain('  Graphify maps your entire codebase into a graph (nodes, edges, communities)');
-  log.plain('  and outputs GRAPH_REPORT.md to your vault. Run it once on large codebases.');
-  console.log('');
-  log.plain('  Quick start (AST-only, free):');
-  log.plain('    python3 -m venv .venv-graphify');
-  log.plain('    source .venv-graphify/bin/activate');
-  log.plain('    pip install graphifyy');
-  log.plain(`    graphify ./ --no-semantic --output ./${vaultName}/GRAPH_REPORT.md`);
-  console.log('');
-  log.plain('  Full semantic run (uses Claude tokens, richer output):');
-  log.plain(`    graphify ./ --output ./${vaultName}/GRAPH_REPORT.md`);
-}
 
 function printDryRun({ projectName, vaultName, repoInputs, agents, workspaceDir }) {
   log.bold('Dry run — nothing will be created:\n');
@@ -447,7 +438,7 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  console.log('  4. Run Graphify to generate GRAPH_REPORT.md (see Step 10 output above)');
+  console.log('  4. GRAPH_REPORT.md is in the vault — rerun Graphify anytime to refresh it');
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
   console.log("  6. To update rules after a new release: devnexus update\n");
 }

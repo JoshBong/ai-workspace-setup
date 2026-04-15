@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { log } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
@@ -9,6 +10,7 @@ import { gitClone } from '../lib/git.js';
 import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
 import { installContractHook } from '../lib/hooks.js';
+import { promptAndRunGraphify } from '../lib/graphify.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointerTemplates from '../templates/pointers.js';
 
@@ -105,6 +107,46 @@ async function runAdd(repos, opts) {
     const gitignoreAdded = addToGitignore(absDir, GITIGNORE_ENTRIES);
     for (const entry of gitignoreAdded) {
       log.success(`Added ${entry} to .gitignore`);
+    }
+
+    // Run GitNexus if available
+    try {
+      execSync('npx gitnexus --version', { stdio: 'pipe', timeout: 5000 });
+      log.plain(`  Indexing ${dirName} with GitNexus...`);
+      try {
+        execSync('npx gitnexus analyze', { cwd: absDir, stdio: 'pipe', timeout: 120000 });
+        log.success(`GitNexus index built for ${dirName}`);
+      } catch {
+        log.warn(`GitNexus indexing failed — run manually: npx gitnexus analyze`);
+      }
+    } catch { /* not installed, skip silently */ }
+
+    // Graphify prompt
+    await promptAndRunGraphify(dirName, absDir, vaultName);
+
+    // Update MOC.md
+    const mocPath = path.join(workspaceDir, vaultName, 'MOC.md');
+    if (fs.existsSync(mocPath)) {
+      let moc = fs.readFileSync(mocPath, 'utf-8');
+      const newRow = `| [[${dirName}]] | Active | |`;
+      if (moc.includes('| (add repos) | Active | |')) {
+        moc = moc.replace('| (add repos) | Active | |', `${newRow}\n| (add repos) | Active | |`);
+      } else {
+        // Append after table header separator line
+        moc = moc.replace(/(## Active Repos[\s\S]*?\|[-| ]+\|)\n/, `$1\n${newRow}\n`);
+      }
+      fs.writeFileSync(mocPath, moc, 'utf-8');
+      log.success(`Updated MOC.md`);
+    }
+
+    // Update SESSION_LOG.md
+    const sessionLogPath = path.join(workspaceDir, vaultName, 'SESSION_LOG.md');
+    if (fs.existsSync(sessionLogPath)) {
+      const date = new Date().toISOString().split('T')[0];
+      const entry = `\n## ${date} — Added repo: ${dirName}\n\nAdded ${dirName} to workspace. Configured .ai-rules/, contract drift hook, and agent pointer files.\n`;
+      let sessionLog = fs.readFileSync(sessionLogPath, 'utf-8');
+      sessionLog = sessionLog.replace('\n(No sessions logged yet.)', '');
+      fs.writeFileSync(sessionLogPath, sessionLog.trimEnd() + '\n' + entry, 'utf-8');
     }
 
     // Add to config
