@@ -31,7 +31,7 @@ function runStatus() {
 
   // Header
   console.log('');
-  console.log(chalk.bold(`aiws`) + chalk.dim(` | templates v${TEMPLATE_VERSION}`));
+  console.log(chalk.bold(`devnexus`) + chalk.dim(` | templates v${TEMPLATE_VERSION}`));
   console.log('');
 
   // Project info
@@ -53,7 +53,7 @@ function runStatus() {
     console.log(chalk.bold('Vault:   ') + `${vaultName}/  ${chalk.dim(vaultInfo)}`);
   } else {
     console.log(chalk.bold('Vault:   ') + chalk.red(`${vaultName}/ (MISSING)`));
-    issues.push({ msg: `Vault directory '${vaultName}' not found`, fix: `aiws init` });
+    issues.push({ msg: `Vault directory '${vaultName}' not found`, fix: `devnexus init` });
   }
 
   // Profile status
@@ -68,22 +68,22 @@ function runStatus() {
     console.log(chalk.bold('Profile: ') + `~/.ai-profile/${chalk.dim(prefsInfo)}`);
   } else {
     console.log(chalk.bold('Profile: ') + chalk.red('~/.ai-profile/ (MISSING)'));
-    issues.push({ msg: 'AI profile not found', fix: 'aiws init' });
+    issues.push({ msg: 'AI profile not found', fix: 'devnexus init' });
   }
 
   // Symlink check
   const profileLink = path.resolve('ai-profile');
   if (!fs.existsSync(profileLink)) {
-    issues.push({ msg: 'ai-profile symlink missing in workspace', fix: 'aiws doctor --fix' });
+    issues.push({ msg: 'ai-profile symlink missing in workspace', fix: 'devnexus doctor --fix' });
   }
 
   // Workspace .ai-rules version
   const wsVersionFile = path.resolve('.ai-rules', 'version.txt');
   const wsVersion = fs.existsSync(wsVersionFile) ? fs.readFileSync(wsVersionFile, 'utf-8').trim() : null;
   if (!wsVersion) {
-    issues.push({ msg: 'Workspace .ai-rules/ not found', fix: 'aiws update' });
+    issues.push({ msg: 'Workspace .ai-rules/ not found', fix: 'devnexus update' });
   } else if (wsVersion !== TEMPLATE_VERSION) {
-    issues.push({ msg: `.ai-rules/ is at v${wsVersion} (latest: v${TEMPLATE_VERSION})`, fix: 'aiws update' });
+    issues.push({ msg: `.ai-rules/ is at v${wsVersion} (latest: v${TEMPLATE_VERSION})`, fix: 'devnexus update' });
   }
 
   // Repos table
@@ -99,7 +99,7 @@ function runStatus() {
 
     if (!fs.existsSync(absDir)) {
       console.log(`  ${chalk.red(repoDir.padEnd(20))} ${chalk.red('MISSING')}`);
-      issues.push({ msg: `Repo '${repoDir}' not found`, fix: `aiws remove ${repoDir}` });
+      issues.push({ msg: `Repo '${repoDir}' not found`, fix: `devnexus remove ${repoDir}` });
       continue;
     }
 
@@ -109,9 +109,9 @@ function runStatus() {
     const versionStr = version ? `v${version}` : chalk.red('no rules');
 
     if (!version) {
-      issues.push({ msg: `${repoDir}/.ai-rules/ not found`, fix: 'aiws update' });
+      issues.push({ msg: `${repoDir}/.ai-rules/ not found`, fix: 'devnexus update' });
     } else if (version !== TEMPLATE_VERSION) {
-      issues.push({ msg: `${repoDir}/.ai-rules/ is at v${version} (latest: v${TEMPLATE_VERSION})`, fix: 'aiws update' });
+      issues.push({ msg: `${repoDir}/.ai-rules/ is at v${version} (latest: v${TEMPLATE_VERSION})`, fix: 'devnexus update' });
     }
 
     // Agent pointers
@@ -121,7 +121,7 @@ function runStatus() {
       } else {
         issues.push({
           msg: `${repoDir}/${getPointerFilename(agent)} missing`,
-          fix: `aiws agent add ${agent} --repo ${repoDir}`,
+          fix: `devnexus agent add ${agent} --repo ${repoDir}`,
         });
         return chalk.red(`${agent}[missing]`);
       }

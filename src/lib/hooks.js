@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const HOOK_MARKER = '# aiws: contract-drift-hook';
+const HOOK_MARKER = '# devnexus: contract-drift-hook';
 
 function hookScript(vaultName) {
   return `#!/usr/bin/env bash
@@ -43,7 +43,7 @@ CONTRACTS_UPDATED=$(echo "$CHANGED" | tr ' ' '\\n' | grep -c "API_CONTRACTS\\.md
 
 if [ "$CONTRACTS_UPDATED" -eq 0 ]; then
   echo ""
-  echo "aiws: contract drift detected — push blocked"
+  echo "devnexus: contract drift detected — push blocked"
   echo ""
   echo "API-related files changed:"
   echo "$API_CHANGED" | sed 's/^/  /'
@@ -77,7 +77,7 @@ export function installContractHook(repoAbsDir, vaultName) {
       fs.chmodSync(hookPath, '755');
       return { installed: true, updated: true };
     }
-    return { installed: false, reason: 'pre-push hook already exists (not managed by aiws)' };
+    return { installed: false, reason: 'pre-push hook already exists (not managed by devnexus)' };
   }
 
   fs.writeFileSync(hookPath, script);

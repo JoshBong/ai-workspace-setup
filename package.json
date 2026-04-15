@@ -1,11 +1,10 @@
 {
   "name": "devnexus",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI tool for setting up AI-augmented workspaces with Obsidian vault integration",
   "type": "module",
   "bin": {
-    "aiws": "./bin/aiws.js",
-    "ai-workspace-setup": "./bin/aiws.js"
+    "devnexus": "./bin/devnexus.js"
   },
   "engines": {
     "node": ">=18.0.0"

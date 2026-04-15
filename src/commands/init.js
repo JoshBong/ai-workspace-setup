@@ -48,7 +48,7 @@ async function runInit(opts) {
   const existing = readConfig();
   if (existing) {
     log.warn('This directory already has a .workspace-config.');
-    log.warn("Use 'aiws update' to refresh rules, or 'aiws add' to add repos.");
+    log.warn("Use 'devnexus update' to refresh rules, or 'devnexus add' to add repos.");
     process.exit(1);
   }
 
@@ -449,5 +449,5 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
   console.log('  4. Run Graphify to generate GRAPH_REPORT.md (see Step 10 output above)');
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
-  console.log("  6. To update rules after a new release: aiws update\n");
+  console.log("  6. To update rules after a new release: devnexus update\n");
 }

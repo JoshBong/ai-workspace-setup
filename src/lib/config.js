@@ -27,7 +27,7 @@ export function requireConfig(dir = process.cwd()) {
   const config = readConfig(dir);
   if (!config) {
     throw new Error(
-      `.workspace-config not found. Run 'aiws init' first, or make sure you're in the workspace root.`
+      `.workspace-config not found. Run 'devnexus init' first, or make sure you're in the workspace root.`
     );
   }
   return config;

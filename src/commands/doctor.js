@@ -55,7 +55,7 @@ function runDoctor(opts) {
   if (config.version) {
     pass('.workspace-config found and valid (JSON format)');
   } else if (config.migrated) {
-    warn('.workspace-config is in legacy bash format', 'aiws doctor --fix will migrate it to JSON');
+    warn('.workspace-config is in legacy bash format', 'devnexus doctor --fix will migrate it to JSON');
     fixes.push({
       msg: 'Migrate config to JSON',
       fn: () => {
@@ -72,7 +72,7 @@ function runDoctor(opts) {
     if (missing.length === 0) {
       pass('AI profile exists with all files');
     } else {
-      fail(`AI profile missing: ${missing.join(', ')}`, 'aiws doctor --fix', () => {
+      fail(`AI profile missing: ${missing.join(', ')}`, 'devnexus doctor --fix', () => {
         const map = {
           'WORKING_STYLE.md': profileTemplates.workingStyle,
           'PREFERENCES.md': profileTemplates.preferences,
@@ -84,7 +84,7 @@ function runDoctor(opts) {
       });
     }
   } else {
-    fail('AI profile (~/.ai-profile/) not found', 'aiws init');
+    fail('AI profile (~/.ai-profile/) not found', 'devnexus init');
   }
 
   // 3. Profile symlink
@@ -95,7 +95,7 @@ function runDoctor(opts) {
       if (fs.existsSync(target) || fs.existsSync(AI_PROFILE_DIR)) {
         pass('AI profile symlink valid');
       } else {
-        fail('AI profile symlink points to missing target', 'aiws doctor --fix', () => {
+        fail('AI profile symlink points to missing target', 'devnexus doctor --fix', () => {
           fs.unlinkSync(profileLink);
           createSymlink(AI_PROFILE_DIR, profileLink);
         });
@@ -104,7 +104,7 @@ function runDoctor(opts) {
       warn('ai-profile exists but is not a symlink');
     }
   } else {
-    fail('AI profile symlink missing in workspace', 'aiws doctor --fix', () => {
+    fail('AI profile symlink missing in workspace', 'devnexus doctor --fix', () => {
       createSymlink(AI_PROFILE_DIR, profileLink);
     });
   }
@@ -135,7 +135,7 @@ function runDoctor(opts) {
       warn('Vault is not a git repository', `cd ${vaultName} && git init`);
     }
   } else {
-    fail(`Vault directory '${vaultName}' not found`, 'aiws init');
+    fail(`Vault directory '${vaultName}' not found`, 'devnexus init');
   }
 
   // 5. Workspace .ai-rules/
@@ -149,7 +149,7 @@ function runDoctor(opts) {
     } else {
       fail(
         `.ai-rules/ at v${version || '?'} (latest: v${TEMPLATE_VERSION})`,
-        'aiws update'
+        'devnexus update'
       );
     }
 
@@ -157,10 +157,10 @@ function runDoctor(opts) {
     const expectedRules = ['01-session-start.md', '02-vault-rules.md', '03-contract-drift.md', '04-profile-rules.md'];
     const missingRules = expectedRules.filter(f => !fs.existsSync(path.join(wsRulesDir, f)));
     if (missingRules.length > 0) {
-      fail(`Workspace .ai-rules/ missing: ${missingRules.join(', ')}`, 'aiws update');
+      fail(`Workspace .ai-rules/ missing: ${missingRules.join(', ')}`, 'devnexus update');
     }
   } else {
-    fail('Workspace .ai-rules/ not found', 'aiws update');
+    fail('Workspace .ai-rules/ not found', 'devnexus update');
   }
 
   // 6. Workspace pointer files
@@ -170,7 +170,7 @@ function runDoctor(opts) {
     if (fs.existsSync(filePath)) {
       pass(`${filename} exists (${getAgentDisplay(agent)})`);
     } else {
-      fail(`${filename} missing (${getAgentDisplay(agent)})`, `aiws agent add ${agent}`, () => {
+      fail(`${filename} missing (${getAgentDisplay(agent)})`, `devnexus agent add ${agent}`, () => {
         const content = pointerTemplates.workspacePointer({ projectName, vaultName, repos });
         writeFileIfNotExists(filePath, content);
       });
@@ -184,7 +184,7 @@ function runDoctor(opts) {
     log.bold(`  ${repoDir}/`);
 
     if (!fs.existsSync(absDir)) {
-      fail(`Directory not found`, `aiws remove ${repoDir}`);
+      fail(`Directory not found`, `devnexus remove ${repoDir}`);
       continue;
     }
 
@@ -196,10 +196,10 @@ function runDoctor(opts) {
       if (v === TEMPLATE_VERSION) {
         pass(`.ai-rules/ at v${TEMPLATE_VERSION}`);
       } else {
-        fail(`.ai-rules/ at v${v || '?'} (latest: v${TEMPLATE_VERSION})`, 'aiws update');
+        fail(`.ai-rules/ at v${v || '?'} (latest: v${TEMPLATE_VERSION})`, 'devnexus update');
       }
     } else {
-      fail('.ai-rules/ not found', `aiws update --repo ${repoDir}`, () => {
+      fail('.ai-rules/ not found', `devnexus update --repo ${repoDir}`, () => {
         const repoStack = detectStack(absDir);
         ensureDir(repoRulesDir);
         writeFile(path.join(repoRulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
@@ -218,7 +218,7 @@ function runDoctor(opts) {
         pass(`${filename} exists`);
       } else {
         const repoStack = detectStack(absDir);
-        fail(`${filename} missing`, `aiws agent add ${agent} --repo ${repoDir}`, () => {
+        fail(`${filename} missing`, `devnexus agent add ${agent} --repo ${repoDir}`, () => {
           const content = pointerTemplates.repoPointer({ repoDir, repoStack });
           writeFileIfNotExists(filePath, content);
         });
@@ -232,7 +232,7 @@ function runDoctor(opts) {
       if (missingEntries.length === 0) {
         pass('.gitignore has all required entries');
       } else {
-        warn(`.gitignore missing: ${missingEntries.join(', ')}`, 'aiws doctor --fix');
+        warn(`.gitignore missing: ${missingEntries.join(', ')}`, 'devnexus doctor --fix');
         fixes.push({
           msg: `Add ${missingEntries.join(', ')} to ${repoDir}/.gitignore`,
           fn: () => {
@@ -296,7 +296,7 @@ function runDoctor(opts) {
     }
   } else if (fixes.length > 0) {
     console.log('');
-    log.plain(`${fixes.length} issue(s) can be auto-fixed. Run: aiws doctor --fix`);
+    log.plain(`${fixes.length} issue(s) can be auto-fixed. Run: devnexus doctor --fix`);
   }
 
   console.log('');

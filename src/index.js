@@ -12,7 +12,7 @@ export function createProgram() {
   const program = new Command();
 
   program
-    .name('aiws')
+    .name('devnexus')
     .description('AI-augmented workspace setup and management')
     .version(`1.0.0 (templates v${TEMPLATE_VERSION})`);
 
