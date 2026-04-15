@@ -30,6 +30,8 @@ your-workspace/
 │   ├── MOC.md                    entry point, read every session
 │   ├── ARCHITECTURE_OVERVIEW.md
 │   ├── GRAPH_REPORT.md           structural analysis from Graphify
+│   ├── NODE_INDEX.md             navigable code graph — god nodes, communities
+│   ├── nodes/                    per-community symbol files (from devnexus index)
 │   ├── API_CONTRACTS.md          endpoint shapes — final authority
 │   ├── DECISIONS.md              rejected approaches, non-obvious choices
 │   └── SESSION_LOG.md            two-line handoff notes
@@ -53,6 +55,7 @@ devnexus gives every agent a vault they read before writing any code. Decisions,
 - **Shared memory** — decisions, architecture, and contracts survive across sessions and engineers
 - **Cross-repo awareness** — sees how frontend, backend, and database connect through `API_CONTRACTS.md`
 - **Decision history** — reads every rejected approach in `DECISIONS.md` before suggesting anything
+- **Code graph** — navigable god nodes, communities, and symbol files in the vault via `devnexus index`
 - **Contract enforcement** — pre-push git hook blocks pushes when API dirs change without updating `API_CONTRACTS.md`
 - **Session continuity** — reads `SESSION_LOG.md` to pick up exactly where the last session left off
 - **Personal profile** — reads `~/.ai-profile/` for your style, preferences, and past corrections
@@ -68,6 +71,7 @@ devnexus add <repo>               add a repo to an existing workspace
 devnexus remove <repo>            remove a repo from workspace tracking
 devnexus graphify                 re-run Graphify structural analysis on the workspace
 devnexus gitnexus                 run gitnexus analyze on every repo in the workspace
+devnexus index                    build navigable code graph in the vault
 devnexus status                   workspace health dashboard
 devnexus doctor                   deep diagnostic
 devnexus doctor --fix             auto-repair common issues
@@ -115,6 +119,8 @@ devnexus sets up two things: a **vault** (shared brain) and **agent rules** (ins
 | `MOC.md` | Entry point — read this first every session | Automatically on `devnexus add` |
 | `ARCHITECTURE_OVERVIEW.md` | How your system works | When you add a service or change how repos connect |
 | `GRAPH_REPORT.md` | Structural analysis — god nodes, communities, bridges | After running Graphify |
+| `NODE_INDEX.md` | Navigable code graph — god nodes, communities, symbol table | After running `devnexus index` |
+| `nodes/` | Per-community directories with symbol files and call graphs | After running `devnexus index` |
 | `API_CONTRACTS.md` | Every endpoint shape — final authority | When any endpoint changes |
 | `DECISIONS.md` | Rejected approaches and non-obvious choices | Auto-prompted by agents mid-session |
 | `SESSION_LOG.md` | Two-line session handoff notes | End of each session |
@@ -194,6 +200,32 @@ cd your-repo && npx gitnexus analyze
 ```
 
 `devnexus init` and `devnexus add` run this automatically if GitNexus is installed, and install a post-commit hook in each repo that keeps the index fresh after every commit. See the [GitNexus docs](https://github.com/abhigyanpatwari/GitNexus) for manual MCP setup per agent.
+
+---
+
+## devnexus index — The Code Graph in Your Vault
+
+Graphify tells you what your codebase looks like structurally — god nodes, communities, bridges. GitNexus lets agents query individual symbols on demand. But neither gives agents a way to *browse* the architecture the way a human browses a codebase.
+
+`devnexus index` closes that gap. It reads the GitNexus graph for every repo in your workspace and writes it into the vault as navigable Obsidian files.
+
+```bash
+devnexus index
+```
+
+**What gets written:**
+
+- `NODE_INDEX.md` — every symbol in the workspace, sorted by importance. God nodes at the top, then communities, then a full symbol table with tier labels, edge counts, and file paths.
+- `nodes/{community}/` — one directory per functional area. Each has a `_COMMUNITY.md` (hub nodes, all members, internal call graph) and individual `.md` files per symbol (callers, callees, cross-references).
+- `ARCHITECTURE_OVERVIEW.md` — god node summary and community list injected between markers.
+
+**Why this matters:**
+
+Before `devnexus index`, an agent starting a session could read the vault and know the architecture *as described by humans*. Now it can also see the architecture *as it actually exists in the code* — which symbols are god nodes, which functions call which, how the codebase clusters into functional areas.
+
+When your agent opens a symbol file and sees 14 callers across 3 communities, it knows not to refactor that function without checking the blast radius. When it reads a community's `_COMMUNITY.md` and sees the internal call graph, it understands the module before touching it. That context was always in the code — now it's in the vault where agents already look.
+
+The index wipes and regenerates on every run. Run it after major changes, or whenever `devnexus doctor` tells you it's stale.
 
 ---
 

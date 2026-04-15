@@ -35,6 +35,9 @@
     "context",
     "developer-tools"
   ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "author": "Joshua Huang",
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {

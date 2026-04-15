@@ -13,6 +13,7 @@ import { agentCommand } from './commands/agent.js';
 import { doctorCommand } from './commands/doctor.js';
 import { graphifyCommand } from './commands/graphify.js';
 import { gitnexusCommand } from './commands/gitnexus.js';
+import { indexCommand } from './commands/index.js';
 
 export function createProgram() {
   const program = new Command();
@@ -31,6 +32,7 @@ export function createProgram() {
   program.addCommand(doctorCommand());
   program.addCommand(graphifyCommand());
   program.addCommand(gitnexusCommand());
+  program.addCommand(indexCommand());
 
   return program;
 }

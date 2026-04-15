@@ -20,6 +20,19 @@ Read these vault files before doing anything else:
 
 Do not suggest code changes until you have read all of the above.
 
+## Code Graph Navigation
+
+If \`./${vaultName}/NODE_INDEX.md\` exists, the workspace has a navigable code graph:
+
+1. **God nodes** are in the NODE_INDEX.md header — always read before editing any of these symbols
+2. **Community directories** are in \`./${vaultName}/nodes/{community}/\` — each has a \`_COMMUNITY.md\` with hub nodes and internal call graph
+3. **Individual symbol files** are in each community directory — callers, callees, and cross-references
+
+**When to use the graph:**
+- Before touching a high-edge symbol → check its node file for blast radius
+- When exploring unfamiliar code → find its community, read \`_COMMUNITY.md\` for context
+- When planning a refactor → check which communities are affected via NODE_INDEX.md
+
 ## Code Intelligence (GitNexus)
 
 If any repo in this workspace has a \`.gitnexus/\` directory, the GitNexus MCP server is available for that repo. Use it — it prevents breaking changes.

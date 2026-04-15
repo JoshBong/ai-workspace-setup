@@ -7,7 +7,7 @@ import { requireConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { getPointerFilename, pointerExists } from '../lib/agents.js';
 import { gitStatus, gitHasRemote, gitLastCommitTime, isGitRepo } from '../lib/git.js';
-import { TEMPLATE_VERSION, AI_PROFILE_DIR } from '../constants.js';
+import { TEMPLATE_VERSION, AI_PROFILE_DIR, DRIFT_DAYS_THRESHOLD } from '../constants.js';
 
 export function statusCommand() {
   const cmd = new Command('status')
@@ -133,6 +133,23 @@ function runStatus() {
     console.log(
       `  ${repoDir.padEnd(20)} .ai-rules/ ${versionStr.padEnd(12)} ${agentStatuses.join(' ').padEnd(40)} ${chalk.dim(stack)}`
     );
+  }
+
+  // Index status
+  if (config.lastIndexed) {
+    const lastIndexed = new Date(config.lastIndexed);
+    const daysSince = Math.floor((Date.now() - lastIndexed.getTime()) / (1000 * 60 * 60 * 24));
+    const stats = config.indexStats || {};
+    let indexInfo = `last: ${lastIndexed.toLocaleDateString()}`;
+    if (stats.symbols) indexInfo += `, ${stats.symbols} symbols, ${stats.communities} communities, ${stats.godNodes} god nodes`;
+    if (daysSince > DRIFT_DAYS_THRESHOLD) {
+      indexInfo += chalk.yellow(` (${daysSince}d ago — consider reindexing)`);
+      issues.push({ msg: `Code graph index is ${daysSince} days old`, fix: 'devnexus index' });
+    }
+    console.log(chalk.bold('Index:   ') + chalk.dim(indexInfo));
+  } else {
+    console.log(chalk.bold('Index:   ') + chalk.dim('not built yet'));
+    issues.push({ msg: 'No code graph index', fix: 'devnexus index' });
   }
 
   // Issues

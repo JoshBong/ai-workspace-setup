@@ -9,7 +9,8 @@ import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { isGitRepo, gitHasRemote } from '../lib/git.js';
 import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { detectStack } from '../lib/detect-stack.js';
-import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES } from '../constants.js';
+import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES, DRIFT_DAYS_THRESHOLD, NODES_DIR, NODE_INDEX_FILE } from '../constants.js';
+import { hasIndex, readMeta } from '../lib/gitnexus-query.js';
 import * as profileTemplates from '../templates/profile.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointerTemplates from '../templates/pointers.js';
@@ -257,6 +258,57 @@ function runDoctor(opts) {
     } else {
       warn('No GitNexus index — agents lack blast-radius analysis', `cd ${repoDir} && npx gitnexus analyze`);
     }
+  }
+
+  // 8. Code graph index
+  console.log('');
+  log.bold('  Code Graph Index');
+
+  if (config.lastIndexed) {
+    const lastIndexed = new Date(config.lastIndexed);
+    const daysSince = Math.floor((Date.now() - lastIndexed.getTime()) / (1000 * 60 * 60 * 24));
+    const stats = config.indexStats || {};
+
+    if (daysSince <= DRIFT_DAYS_THRESHOLD) {
+      pass(`Index built ${daysSince}d ago (${stats.symbols || '?'} symbols, ${stats.communities || '?'} communities)`);
+    } else {
+      warn(`Index is ${daysSince} days old — may be stale`, 'devnexus index');
+    }
+
+    // Check NODE_INDEX.md exists
+    const nodeIndexPath = path.join(path.resolve(vaultName), NODE_INDEX_FILE);
+    if (fs.existsSync(nodeIndexPath)) {
+      pass('NODE_INDEX.md exists in vault');
+    } else {
+      fail('NODE_INDEX.md missing from vault', 'devnexus index');
+    }
+
+    // Check nodes/ directory
+    const nodesPath = path.join(path.resolve(vaultName), NODES_DIR);
+    if (fs.existsSync(nodesPath)) {
+      const communityDirs = fs.readdirSync(nodesPath).filter(f => fs.statSync(path.join(nodesPath, f)).isDirectory());
+      pass(`nodes/ has ${communityDirs.length} community directories`);
+    } else {
+      fail('nodes/ directory missing from vault', 'devnexus index');
+    }
+
+    // Check symbol count drift per repo
+    if (stats.symbols) {
+      for (const repoDir of repos) {
+        const absDir = path.resolve(repoDir);
+        if (!hasIndex(absDir)) continue;
+        const meta = readMeta(absDir);
+        if (!meta || !meta.stats) continue;
+        const currentSymbols = meta.stats.nodes || 0;
+        // Compare against last indexed (rough — total vs per-repo)
+        // Just flag if GitNexus index is newer than our index
+        if (meta.indexedAt && new Date(meta.indexedAt) > lastIndexed) {
+          warn(`${repoDir}: GitNexus re-analyzed since last index`, 'devnexus index');
+        }
+      }
+    }
+  } else {
+    warn('Code graph index not built yet', 'devnexus index');
   }
 
   // Vault-map.json registration
