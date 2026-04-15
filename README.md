@@ -197,28 +197,15 @@ When Engineer A discovers something, it's available to Engineer B's agent within
 
 ## Graphify — Structural Analysis
 
-[Graphify](https://github.com/safishamsi/graphify) maps your entire workspace into a graph — god nodes, communities, bridges, knowledge gaps — and writes `GRAPH_REPORT.md` to the vault.
+[Graphify](https://github.com/safishamsi/graphify) is a Claude Code skill that maps your workspace into a graph — god nodes, communities, bridges, knowledge gaps — and writes `GRAPH_REPORT.md` to the vault.
 
-`devnexus init` and `devnexus add` both prompt you to run it. It runs **once across the whole workspace** (not per repo), so the graph shows how all your repos connect. Rerun anytime:
+`devnexus graphify` installs Graphify and wires the skill into Claude Code. Then generate the report from inside Claude Code:
 
-```bash
-devnexus graphify
+```
+/graphify .
 ```
 
-Or manually:
-
-```bash
-# Install (once)
-python3 -m venv .venv-graphify
-source .venv-graphify/bin/activate
-pip install graphifyy
-
-# Run from workspace root
-graphify ./ --no-semantic --output ./your-vault/GRAPH_REPORT.md   # fast, free
-graphify ./ --output ./your-vault/GRAPH_REPORT.md                 # full semantic (Claude tokens)
-```
-
-devnexus writes a `.graphifyignore` at the workspace root before each run to exclude generated files (vault, `.ai-rules/`, pointer files) so the graph only sees source code.
+Claude will analyze the workspace and write `GRAPH_REPORT.md` to your vault. Rerun anytime with `/graphify .` to refresh the report after major changes.
 
 **What you get:**
 - **God nodes** — data structures where a single change ripples through dozens of files

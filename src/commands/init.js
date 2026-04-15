@@ -441,7 +441,7 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  console.log('  4. Rerun Graphify anytime: devnexus graphify');
+  console.log('  4. Generate GRAPH_REPORT.md: open Claude Code and type /graphify .');
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
   console.log("  6. To update rules after a new release: devnexus update\n");
 }

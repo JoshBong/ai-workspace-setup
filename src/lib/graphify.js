@@ -1,17 +1,14 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import inquirer from 'inquirer';
 import { log } from './output.js';
 
 function getGraphifyBin(workspaceDir) {
-  // Check local venv first
   const venvBin = path.join(workspaceDir, '.venv-graphify', 'bin', 'graphify');
   if (fs.existsSync(venvBin)) return venvBin;
 
-  // Fall back to global
   try {
-    execSync('graphify --version', { stdio: 'pipe', timeout: 5000 });
+    execSync('graphify --help', { stdio: 'pipe', timeout: 5000 });
     return 'graphify';
   } catch {
     return null;
@@ -19,7 +16,7 @@ function getGraphifyBin(workspaceDir) {
 }
 
 function autoInstall(workspaceDir) {
-  log.plain('  Graphify not found — installing into .venv-graphify/...');
+  log.plain('  Installing Graphify into .venv-graphify/...');
   try {
     execSync('python3 -m venv .venv-graphify', { cwd: workspaceDir, stdio: 'pipe' });
     execSync('.venv-graphify/bin/pip install graphifyy --quiet', { cwd: workspaceDir, stdio: 'pipe' });
@@ -34,25 +31,6 @@ function autoInstall(workspaceDir) {
   }
 }
 
-function writeGraphifyIgnore(workspaceDir, vaultName) {
-  const content = [
-    '# devnexus — generated files, not source code',
-    `${vaultName}/`,
-    '.ai-rules/',
-    'ai-profile/',
-    'CLAUDE.md',
-    'AGENTS.md',
-    '.cursorrules',
-    '.windsurfrules',
-    '.workspace-config',
-    '.graphifyignore',
-    'node_modules/',
-    '.git/',
-    '.venv-graphify/',
-  ].join('\n') + '\n';
-  fs.writeFileSync(path.join(workspaceDir, '.graphifyignore'), content, 'utf-8');
-}
-
 export async function promptAndRunGraphify(workspaceDir, vaultName) {
   console.log('');
 
@@ -62,34 +40,17 @@ export async function promptAndRunGraphify(workspaceDir, vaultName) {
     if (!bin) return;
   }
 
-  const { mode } = await inquirer.prompt([{
-    type: 'list',
-    name: 'mode',
-    message: 'Run Graphify on workspace?',
-    choices: [
-      { name: 'AST-only — fast, free (recommended for first run)', value: 'ast' },
-      { name: 'Full semantic — uses Claude tokens, richer output', value: 'semantic' },
-      { name: 'Skip for now', value: 'skip' },
-    ],
-  }]);
-
-  if (mode === 'skip') {
-    log.plain(`  Skipped. Run anytime: devnexus graphify`);
-    return;
-  }
-
-  writeGraphifyIgnore(workspaceDir, vaultName);
-
-  const outputPath = path.join(vaultName, 'GRAPH_REPORT.md');
-  const cmd = mode === 'ast'
-    ? `${bin} ./ --no-semantic --output ${outputPath}`
-    : `${bin} ./ --output ${outputPath}`;
-
-  log.plain(`  Running: graphify ./ ${mode === 'ast' ? '--no-semantic ' : ''}--output ${outputPath}`);
+  // Install the skill into Claude Code's global skills dir
   try {
-    execSync(cmd, { cwd: workspaceDir, stdio: 'inherit', timeout: 300000 });
-    log.success(`GRAPH_REPORT.md updated in ${vaultName}/`);
+    execSync(`${bin} install --platform claude`, { cwd: workspaceDir, stdio: 'pipe' });
+    log.success('Graphify skill installed for Claude Code');
   } catch {
-    log.warn(`Graphify failed — run manually: devnexus graphify`);
+    // Non-fatal — skill install is optional
   }
+
+  log.plain('');
+  log.plain('  Graphify is a Claude Code skill. To generate GRAPH_REPORT.md:');
+  log.plain(`  1. Open Claude Code in your workspace`);
+  log.plain(`  2. Type: /graphify .`);
+  log.plain(`  3. Claude will write the report to ${vaultName}/GRAPH_REPORT.md`);
 }

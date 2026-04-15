@@ -1,6 +1,6 @@
 {
   "name": "devnexus",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "CLI tool for setting up AI-augmented workspaces with Obsidian vault integration",
   "type": "module",
   "bin": {
