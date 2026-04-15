@@ -22,11 +22,30 @@ Do not suggest code changes until you have read all of the above.
 
 ## Code Intelligence (GitNexus)
 
-If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is available:
-- Before editing any function/class: run \`gitnexus_impact({target: "symbolName", direction: "upstream"})\`
-- For architecture questions: run \`gitnexus_query({query: "concept"})\`
-- Before committing: run \`gitnexus_detect_changes({scope: "staged"})\`
-- Never rename symbols with find-and-replace — use \`gitnexus_rename\` instead
+If any repo in this workspace has a \`.gitnexus/\` directory, the GitNexus MCP server is available for that repo. Use it — it prevents breaking changes.
+
+### Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run \`gitnexus_impact({target: "symbolName", direction: "upstream"})\` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- **MUST run \`gitnexus_detect_changes({scope: "staged"})\` before committing** to verify your changes only affect expected symbols and execution flows.
+- For full context on a symbol — callers, callees, execution flows — use \`gitnexus_context({name: "symbolName"})\`.
+- To find code by concept instead of grepping: \`gitnexus_query({query: "concept"})\`.
+
+### Never Do
+
+- NEVER edit a function, class, or method without first running \`gitnexus_impact\` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use \`gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})\` which understands the call graph.
+- NEVER commit without running \`gitnexus_detect_changes()\` to confirm scope.
+
+### Impact Risk Levels
+
+| Depth | Meaning | Action |
+|-------|---------|--------|
+| d=1 | WILL BREAK — direct callers/importers | MUST update these |
+| d=2 | LIKELY AFFECTED — indirect deps | Should test |
+| d=3 | MAY NEED TESTING — transitive | Test if critical path |
 `;
 }
 

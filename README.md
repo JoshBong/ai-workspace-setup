@@ -81,15 +81,28 @@ devnexus agent rm <agent>         remove an agent
 
 **`.ai-rules/`** (script-owned, auto-updated by `devnexus update`):
 
+Workspace root:
+
 | File | Purpose |
 |------|---------|
-| `01-session-start.md` | What to read on session start, vault workflow |
+| `01-session-start.md` | What to read on session start, GitNexus enforcement |
 | `02-vault-rules.md` | How to write to and maintain vault files |
 | `03-contract-drift.md` | Pre-push contract drift check logic |
 | `04-profile-rules.md` | When and how to update `~/.ai-profile/` |
 | `version.txt` | Tracks which release generated these rules |
 
-**Pointer files** (yours — never overwritten):
+Each repo:
+
+| File | Purpose |
+|------|---------|
+| `01-source-of-truth.md` | Vault as authority for architecture, contracts, decisions |
+| `02-decision-logic.md` | When and how to write to `DECISIONS.md` |
+| `03-contract-drift.md` | Pre-push contract drift check logic |
+| `04-operator-profile.md` | Reading and updating `~/.ai-profile/` |
+| `05-code-intelligence.md` | GitNexus enforcement — impact analysis before any edit |
+| `version.txt` | Tracks which release generated these rules |
+
+**Pointer files** (yours — never overwritten). Created for each agent you configure:
 
 | File | Agent |
 |------|-------|
@@ -154,7 +167,7 @@ Agents read this on session start. When Sarah's agent suggests Redis next week, 
 
 ### Global AI profile (`~/.ai-profile/`)
 
-Starts empty, fills in organically as agents learn how you work. Symlinked into the workspace so Cursor (which can't follow paths outside the project) can read and write to it.
+Starts empty, fills in organically as agents learn how you work. Symlinked into the workspace so agents that can't follow paths outside the project can read and write to it.
 
 | File | Purpose |
 |------|---------|
@@ -197,15 +210,9 @@ When Engineer A discovers something, it's available to Engineer B's agent within
 
 ## Graphify — Structural Analysis
 
-[Graphify](https://github.com/safishamsi/graphify) is a Claude Code skill that maps your workspace into a graph — god nodes, communities, bridges, knowledge gaps — and writes `GRAPH_REPORT.md` to the vault.
+[Graphify](https://github.com/safishamsi/graphify) is an agent skill that maps your workspace into a graph — god nodes, communities, bridges, knowledge gaps — and writes `GRAPH_REPORT.md` to the vault.
 
-`devnexus graphify` installs Graphify and wires the skill into Claude Code. Then generate the report from inside Claude Code:
-
-```
-/graphify .
-```
-
-Claude will analyze the workspace and write `GRAPH_REPORT.md` to your vault. Rerun anytime with `/graphify .` to refresh the report after major changes.
+`devnexus graphify` fetches the Graphify skill and installs it for each configured agent. It analyzes the workspace and writes `GRAPH_REPORT.md` to your vault. Rerun anytime to refresh the report after major changes.
 
 **What you get:**
 - **God nodes** — data structures where a single change ripples through dozens of files
@@ -233,21 +240,7 @@ npm install -g gitnexus
 cd your-repo && npx gitnexus analyze
 ```
 
-`devnexus init` and `devnexus add` run this automatically if GitNexus is installed, and install a post-commit hook in each repo that keeps the index fresh after every commit.
-
-**Claude Code:**
-```bash
-claude mcp add gitnexus -- npx -y gitnexus@latest mcp
-```
-
-**Cursor** (`~/.cursor/mcp.json`):
-```json
-{
-  "mcpServers": {
-    "gitnexus": { "command": "npx", "args": ["-y", "gitnexus@latest", "mcp"] }
-  }
-}
-```
+`devnexus init` and `devnexus add` run this automatically if GitNexus is installed, and install a post-commit hook in each repo that keeps the index fresh after every commit. See the [GitNexus docs](https://github.com/abhigyanpatwari/GitNexus) for manual MCP setup per agent.
 
 ---
 
@@ -279,10 +272,8 @@ The plugin is pre-configured by `devnexus init` — auto-commit and auto-pull ev
 | `git` | Yes | Vault sync, repo cloning |
 | `node` ≥18 | Yes | Running devnexus |
 | [Obsidian](https://obsidian.md/) | Yes | Opening the vault |
-| `python3` | Optional | Graphify structural analysis |
-| [Claude Code](https://claude.ai/claude-code) | Optional | AI agent |
-| [Cursor](https://cursor.com/) | Optional | AI agent |
-| [Windsurf](https://codeium.com/windsurf) | Optional | AI agent |
+| [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Optional | Code intelligence, impact analysis |
+| AI agent (Claude Code, Cursor, Windsurf, Codex) | Optional | At least one |
 
 ---
 

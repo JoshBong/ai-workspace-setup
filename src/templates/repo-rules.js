@@ -41,3 +41,53 @@ export function operatorProfile() {
 Read \`../ai-profile/\` before starting work — it contains the user's working style, code preferences, and past corrections. If you notice a behavioral pattern or the user corrects you, ask to update the profile. Never repeat a correction logged in \`../ai-profile/CORRECTIONS.md\`.
 `;
 }
+
+export function codeIntelligence() {
+  return `# Code Intelligence (GitNexus)
+
+If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is active. Use it before touching code.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run \`gitnexus_impact({target: "symbolName", direction: "upstream"})\` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding.
+- **MUST run \`gitnexus_detect_changes({scope: "staged"})\` before every commit** to verify your changes only affect expected symbols and execution flows.
+- For full context on a symbol (callers, callees, execution flows): \`gitnexus_context({name: "symbolName"})\`.
+- To find code by concept instead of grepping: \`gitnexus_query({query: "concept"})\`.
+
+## When Debugging
+
+1. \`gitnexus_query({query: "<error or symptom>"})\` — find execution flows related to the issue
+2. \`gitnexus_context({name: "<suspect function>"})\` — see all callers, callees, and process participation
+3. \`gitnexus_impact({target: "<function>", direction: "upstream"})\` — trace what triggered it
+
+## When Refactoring
+
+- **Renaming:** MUST use \`gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})\` first. Review the preview, then run with \`dry_run: false\`.
+- **Extracting/Splitting:** MUST run \`gitnexus_context({name: "target"})\` then \`gitnexus_impact({target: "target", direction: "upstream"})\` before moving code.
+- After any refactor: run \`gitnexus_detect_changes({scope: "all"})\` to verify only expected files changed.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running \`gitnexus_impact\` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings.
+- NEVER rename symbols with find-and-replace — use \`gitnexus_rename\` which understands the call graph.
+- NEVER commit without running \`gitnexus_detect_changes()\` to confirm scope.
+
+## Impact Risk Levels
+
+| Depth | Meaning | Action |
+|-------|---------|--------|
+| d=1 | WILL BREAK — direct callers/importers | MUST update these |
+| d=2 | LIKELY AFFECTED — indirect deps | Should test |
+| d=3 | MAY NEED TESTING — transitive | Test if critical path |
+
+## Self-Check Before Finishing
+
+Before completing any code modification task:
+1. \`gitnexus_impact\` was run for all modified symbols
+2. No HIGH/CRITICAL warnings were ignored
+3. \`gitnexus_detect_changes()\` confirms changes match expected scope
+4. All d=1 (WILL BREAK) dependents were updated
+`;
+}

@@ -206,6 +206,7 @@ function runDoctor(opts) {
         writeFile(path.join(repoRulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
         writeFile(path.join(repoRulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));
         writeFile(path.join(repoRulesDir, '04-operator-profile.md'), repoRules.operatorProfile());
+        writeFile(path.join(repoRulesDir, '05-code-intelligence.md'), repoRules.codeIntelligence());
         writeFile(path.join(repoRulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
       });
     }

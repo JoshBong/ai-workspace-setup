@@ -137,6 +137,7 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack }) {
   writeFile(path.join(rulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
   writeFile(path.join(rulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));
   writeFile(path.join(rulesDir, '04-operator-profile.md'), repoRules.operatorProfile());
+  writeFile(path.join(rulesDir, '05-code-intelligence.md'), repoRules.codeIntelligence());
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
 
   const hookResult = installContractHook(absRepoDir, vaultName);
