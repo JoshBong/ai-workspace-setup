@@ -1,0 +1,152 @@
+import { Command } from 'commander';
+import fs from 'fs';
+import path from 'path';
+import chalk from 'chalk';
+import { log } from '../lib/output.js';
+import { requireConfig } from '../lib/config.js';
+import { detectStack } from '../lib/detect-stack.js';
+import { getPointerFilename, pointerExists } from '../lib/agents.js';
+import { gitStatus, gitHasRemote, gitLastCommitTime, isGitRepo } from '../lib/git.js';
+import { TEMPLATE_VERSION, AI_PROFILE_DIR } from '../constants.js';
+
+export function statusCommand() {
+  const cmd = new Command('status')
+    .description('Show workspace health dashboard')
+    .action(async () => {
+      try {
+        runStatus();
+      } catch (err) {
+        log.error(err.message);
+        process.exit(1);
+      }
+    });
+
+  return cmd;
+}
+
+function runStatus() {
+  const config = requireConfig();
+  const { projectName, vaultName, repos = [], agents = [], templateVersion } = config;
+  const issues = [];
+
+  // Header
+  console.log('');
+  console.log(chalk.bold(`aiws`) + chalk.dim(` | templates v${TEMPLATE_VERSION}`));
+  console.log('');
+
+  // Project info
+  console.log(chalk.bold('Project: ') + projectName);
+
+  // Vault status
+  const vaultDir = path.resolve(vaultName);
+  if (fs.existsSync(vaultDir)) {
+    const status = isGitRepo(vaultDir) ? gitStatus(vaultDir) : 'no git';
+    const hasRemote = isGitRepo(vaultDir) && gitHasRemote(vaultDir);
+    const lastSync = isGitRepo(vaultDir) ? gitLastCommitTime(vaultDir) : null;
+
+    let vaultInfo = `(git: ${status}`;
+    if (hasRemote) vaultInfo += ', has remote';
+    else issues.push({ msg: 'Vault has no git remote', fix: `cd ${vaultName} && git remote add origin <url>` });
+    if (lastSync) vaultInfo += `, last commit: ${lastSync}`;
+    vaultInfo += ')';
+
+    console.log(chalk.bold('Vault:   ') + `${vaultName}/  ${chalk.dim(vaultInfo)}`);
+  } else {
+    console.log(chalk.bold('Vault:   ') + chalk.red(`${vaultName}/ (MISSING)`));
+    issues.push({ msg: `Vault directory '${vaultName}' not found`, fix: `aiws init` });
+  }
+
+  // Profile status
+  if (fs.existsSync(AI_PROFILE_DIR)) {
+    const prefsPath = path.join(AI_PROFILE_DIR, 'PREFERENCES.md');
+    let prefsInfo = '';
+    if (fs.existsSync(prefsPath)) {
+      const content = fs.readFileSync(prefsPath, 'utf-8');
+      const entries = (content.match(/^## /gm) || []).length;
+      if (entries > 0) prefsInfo = ` (${entries} entries in PREFERENCES.md)`;
+    }
+    console.log(chalk.bold('Profile: ') + `~/.ai-profile/${chalk.dim(prefsInfo)}`);
+  } else {
+    console.log(chalk.bold('Profile: ') + chalk.red('~/.ai-profile/ (MISSING)'));
+    issues.push({ msg: 'AI profile not found', fix: 'aiws init' });
+  }
+
+  // Symlink check
+  const profileLink = path.resolve('ai-profile');
+  if (!fs.existsSync(profileLink)) {
+    issues.push({ msg: 'ai-profile symlink missing in workspace', fix: 'aiws doctor --fix' });
+  }
+
+  // Workspace .ai-rules version
+  const wsVersionFile = path.resolve('.ai-rules', 'version.txt');
+  const wsVersion = fs.existsSync(wsVersionFile) ? fs.readFileSync(wsVersionFile, 'utf-8').trim() : null;
+  if (!wsVersion) {
+    issues.push({ msg: 'Workspace .ai-rules/ not found', fix: 'aiws update' });
+  } else if (wsVersion !== TEMPLATE_VERSION) {
+    issues.push({ msg: `.ai-rules/ is at v${wsVersion} (latest: v${TEMPLATE_VERSION})`, fix: 'aiws update' });
+  }
+
+  // Repos table
+  console.log('');
+  console.log(chalk.bold('Repos:'));
+
+  if (repos.length === 0) {
+    log.dim('  (no repos configured)');
+  }
+
+  for (const repoDir of repos) {
+    const absDir = path.resolve(repoDir);
+
+    if (!fs.existsSync(absDir)) {
+      console.log(`  ${chalk.red(repoDir.padEnd(20))} ${chalk.red('MISSING')}`);
+      issues.push({ msg: `Repo '${repoDir}' not found`, fix: `aiws remove ${repoDir}` });
+      continue;
+    }
+
+    // Version
+    const versionFile = path.join(absDir, '.ai-rules', 'version.txt');
+    const version = fs.existsSync(versionFile) ? fs.readFileSync(versionFile, 'utf-8').trim() : null;
+    const versionStr = version ? `v${version}` : chalk.red('no rules');
+
+    if (!version) {
+      issues.push({ msg: `${repoDir}/.ai-rules/ not found`, fix: 'aiws update' });
+    } else if (version !== TEMPLATE_VERSION) {
+      issues.push({ msg: `${repoDir}/.ai-rules/ is at v${version} (latest: v${TEMPLATE_VERSION})`, fix: 'aiws update' });
+    }
+
+    // Agent pointers
+    const agentStatuses = agents.map(agent => {
+      if (pointerExists(absDir, agent)) {
+        return chalk.green(agent);
+      } else {
+        issues.push({
+          msg: `${repoDir}/${getPointerFilename(agent)} missing`,
+          fix: `aiws agent add ${agent} --repo ${repoDir}`,
+        });
+        return chalk.red(`${agent}[missing]`);
+      }
+    });
+
+    // Stack
+    const stack = detectStack(absDir);
+
+    console.log(
+      `  ${repoDir.padEnd(20)} .ai-rules/ ${versionStr.padEnd(12)} ${agentStatuses.join(' ').padEnd(40)} ${chalk.dim(stack)}`
+    );
+  }
+
+  // Issues
+  if (issues.length > 0) {
+    console.log('');
+    console.log(chalk.bold('Issues:'));
+    for (const { msg, fix } of issues) {
+      console.log(chalk.yellow(`  ! ${msg}`));
+      if (fix) console.log(chalk.dim(`    Fix: ${fix}`));
+    }
+  } else {
+    console.log('');
+    console.log(chalk.green('  No issues found. Workspace is healthy.'));
+  }
+
+  console.log('');
+}

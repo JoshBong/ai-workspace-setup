@@ -1,0 +1,65 @@
+import fs from 'fs';
+import path from 'path';
+import { CONFIG_FILE, CONFIG_VERSION } from '../constants.js';
+
+export function readConfig(dir = process.cwd()) {
+  const configPath = path.join(dir, CONFIG_FILE);
+  if (!fs.existsSync(configPath)) return null;
+
+  const content = fs.readFileSync(configPath, 'utf-8');
+
+  // Try JSON first
+  try {
+    return JSON.parse(content);
+  } catch {
+    // Fall back to legacy bash format
+    return parseLegacyConfig(content);
+  }
+}
+
+export function writeConfig(config, dir = process.cwd()) {
+  const configPath = path.join(dir, CONFIG_FILE);
+  const data = { version: CONFIG_VERSION, ...config };
+  fs.writeFileSync(configPath, JSON.stringify(data, null, 2) + '\n');
+}
+
+export function requireConfig(dir = process.cwd()) {
+  const config = readConfig(dir);
+  if (!config) {
+    throw new Error(
+      `.workspace-config not found. Run 'aiws init' first, or make sure you're in the workspace root.`
+    );
+  }
+  return config;
+}
+
+function parseLegacyConfig(content) {
+  const config = { migrated: true };
+
+  const strings = {
+    PROJECT_NAME: 'projectName',
+    VAULT_NAME: 'vaultName',
+    TECH_STACK: 'techStack',
+    TEMPLATE_VERSION: 'templateVersion',
+  };
+
+  for (const [bashKey, jsonKey] of Object.entries(strings)) {
+    const match = content.match(new RegExp(`${bashKey}="([^"]*)"`));
+    if (match) config[jsonKey] = match[1];
+  }
+
+  const arrays = {
+    REPO_DIRS: 'repos',
+    AGENTS: 'agents',
+  };
+
+  for (const [bashKey, jsonKey] of Object.entries(arrays)) {
+    const match = content.match(new RegExp(`${bashKey}=\\(([^)]*)\\)`));
+    if (match) {
+      config[jsonKey] = match[1].match(/"([^"]*)"/g)?.map(s => s.replace(/"/g, '')) || [];
+    }
+  }
+
+  config.version = CONFIG_VERSION;
+  return config;
+}
