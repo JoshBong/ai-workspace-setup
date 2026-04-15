@@ -168,7 +168,7 @@ Starts empty, fills in organically as agents learn how you work. Symlinked into 
 
 | Without vault | With vault |
 |--------------|------------|
-| Re-explain architecture every session (200+ tokens) | Agent reads `ARCHITECTURE_OVERVIEW.md` once — 0 re-explanation |
+| Re-explain architecture every session (200+ tokens) | Agent reads `ARCHITECTURE_OVERVIEW.md` once, 0 re-explanation |
 | "Don't use Redis, we tried that" (50 tokens, repeated) | Agent reads `DECISIONS.md`, already knows |
 | Agent guesses API shape, gets it wrong, you debug | Agent reads `API_CONTRACTS.md`, knows exact response shapes |
 
