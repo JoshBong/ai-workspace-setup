@@ -1,5 +1,9 @@
 import { Command } from 'commander';
+import { createRequire } from 'module';
 import { TEMPLATE_VERSION } from './constants.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 import { initCommand } from './commands/init.js';
 import { updateCommand } from './commands/update.js';
 import { statusCommand } from './commands/status.js';
@@ -14,7 +18,7 @@ export function createProgram() {
   program
     .name('devnexus')
     .description('AI-augmented workspace setup and management')
-    .version(`1.0.0 (templates v${TEMPLATE_VERSION})`);
+    .version(`${version} (templates v${TEMPLATE_VERSION})`);
 
   program.addCommand(initCommand());
   program.addCommand(updateCommand());
