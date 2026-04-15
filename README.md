@@ -109,7 +109,7 @@ This split means you get updated rules without losing your custom notes.
 │  Working style, preferences, corrections                │
 ├─────────────────────────────────────────────────────────┤
 │  AGENT (workspace root or individual repo)              │
-│  Reads pointer → .ai-rules/ → vault → profile          │
+│  Reads pointer → .ai-rules/ → vault → profile           │
 ├─────────────────────────────────────────────────────────┤
 │  OBSIDIAN VAULT (shared brain)                          │
 │  Architecture, contracts, decisions, session log        │
