@@ -4,12 +4,33 @@ import path from 'path';
 import inquirer from 'inquirer';
 import { log } from './output.js';
 
-function isGraphifyAvailable() {
+function getGraphifyBin(workspaceDir) {
+  // Check local venv first
+  const venvBin = path.join(workspaceDir, '.venv-graphify', 'bin', 'graphify');
+  if (fs.existsSync(venvBin)) return venvBin;
+
+  // Fall back to global
   try {
     execSync('graphify --version', { stdio: 'pipe', timeout: 5000 });
-    return true;
+    return 'graphify';
   } catch {
-    return false;
+    return null;
+  }
+}
+
+function autoInstall(workspaceDir) {
+  log.plain('  Graphify not found — installing into .venv-graphify/...');
+  try {
+    execSync('python3 -m venv .venv-graphify', { cwd: workspaceDir, stdio: 'pipe' });
+    execSync('.venv-graphify/bin/pip install graphifyy --quiet', { cwd: workspaceDir, stdio: 'pipe' });
+    log.success('Graphify installed in .venv-graphify/');
+    return path.join(workspaceDir, '.venv-graphify', 'bin', 'graphify');
+  } catch (err) {
+    log.warn(`Auto-install failed: ${err.message}`);
+    log.plain('  Install manually:');
+    log.plain('    python3 -m venv .venv-graphify && source .venv-graphify/bin/activate');
+    log.plain('    pip install graphifyy');
+    return null;
   }
 }
 
@@ -35,12 +56,10 @@ function writeGraphifyIgnore(workspaceDir, vaultName) {
 export async function promptAndRunGraphify(workspaceDir, vaultName) {
   console.log('');
 
-  if (!isGraphifyAvailable()) {
-    log.warn('Graphify not found — install it to generate GRAPH_REPORT.md:');
-    log.plain('  python3 -m venv .venv-graphify && source .venv-graphify/bin/activate');
-    log.plain('  pip install graphifyy');
-    log.plain(`  graphify ./ --no-semantic --output ./${vaultName}/GRAPH_REPORT.md`);
-    return;
+  let bin = getGraphifyBin(workspaceDir);
+  if (!bin) {
+    bin = autoInstall(workspaceDir);
+    if (!bin) return;
   }
 
   const { mode } = await inquirer.prompt([{
@@ -55,7 +74,7 @@ export async function promptAndRunGraphify(workspaceDir, vaultName) {
   }]);
 
   if (mode === 'skip') {
-    log.plain(`  Skipped. Run manually: graphify ./ --no-semantic --output ./${vaultName}/GRAPH_REPORT.md`);
+    log.plain(`  Skipped. Run anytime: devnexus graphify`);
     return;
   }
 
@@ -63,14 +82,14 @@ export async function promptAndRunGraphify(workspaceDir, vaultName) {
 
   const outputPath = path.join(vaultName, 'GRAPH_REPORT.md');
   const cmd = mode === 'ast'
-    ? `graphify ./ --no-semantic --output ${outputPath}`
-    : `graphify ./ --output ${outputPath}`;
+    ? `${bin} ./ --no-semantic --output ${outputPath}`
+    : `${bin} ./ --output ${outputPath}`;
 
-  log.plain(`  Running: ${cmd}`);
+  log.plain(`  Running: graphify ./ ${mode === 'ast' ? '--no-semantic ' : ''}--output ${outputPath}`);
   try {
     execSync(cmd, { cwd: workspaceDir, stdio: 'inherit', timeout: 300000 });
     log.success(`GRAPH_REPORT.md updated in ${vaultName}/`);
   } catch {
-    log.warn(`Graphify failed — run manually from workspace root: ${cmd}`);
+    log.warn(`Graphify failed — run manually: devnexus graphify`);
   }
 }
