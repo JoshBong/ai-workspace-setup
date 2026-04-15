@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🧠 AI Workspace Setup
+# devnexus
 
 **Give your AI agents a shared brain across repos.**
 
-One script sets up a multi-repo workspace where your AI agents share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected. Works with Claude Code, Cursor, Codex, and Windsurf.
+One command sets up a multi-repo workspace where your AI agents share context through an Obsidian vault — so your agents remember decisions, follow conventions, and never suggest approaches you've already rejected. Works with Claude Code, Cursor, Codex, and Windsurf.
 
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 
@@ -99,6 +99,23 @@ npx devnexus init
 6. **Your name** — for decision log attribution
 
 `devnexus` saves your choices to `.workspace-config` so future updates can regenerate files without re-prompting.
+
+---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `devnexus init` | Set up a new AI-augmented workspace — creates vault, .ai-rules/, pointer files, and installs git hooks |
+| `devnexus update` | Regenerate `.ai-rules/` and git hooks with the latest templates (never touches your pointer files or vault) |
+| `devnexus add <repo>` | Add a repo to an existing workspace |
+| `devnexus remove <repo>` | Remove a repo from workspace tracking |
+| `devnexus status` | Show workspace health dashboard — checks vault, rules versions, and pointer files |
+| `devnexus doctor` | Deep diagnostic with auto-fix — use when something seems broken |
+| `devnexus doctor --fix` | Auto-repair common issues (missing symlinks, outdated rules, etc.) |
+| `devnexus agent ls` | List which agents are configured per repo |
+| `devnexus agent add <agent>` | Add an agent (claude, cursor, codex, windsurf) to a repo |
+| `devnexus agent rm <agent>` | Remove an agent from a repo |
 
 ---
 
@@ -292,7 +309,7 @@ The profile starts empty and fills in organically. No setup questions — agents
 | `AGENTS.md` | Codex | Short pointer to `.ai-rules/` + space for your custom notes |
 | `.windsurfrules` | Windsurf | Short pointer to `.ai-rules/` + space for your custom notes |
 
-Only the pointer files for agents you selected during setup are created. You can add more later by re-running setup or creating them manually — just point them to `.ai-rules/`.
+Only the pointer files for agents you selected during setup are created. You can add more later by using `devnexus agent add` — or manually create pointer files that point to `.ai-rules/`.
 
 ### `.workspace-config`
 
@@ -300,7 +317,7 @@ Saved during setup and read by `devnexus update`. Contains your project name, va
 
 ### Auto-detected tech stacks
 
-The script reads your repo files and tailors the rules to the right framework:
+devnexus reads your repo files and tailors the rules to the right framework:
 
 | Detected via | Identified as |
 |-------------|---------------|
@@ -352,7 +369,7 @@ mkdir new-project && cd new-project
 devnexus init
 ```
 
-The script detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
+devnexus detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
 
 Each workspace is independent. You can have as many as you want:
 
@@ -367,10 +384,10 @@ Each workspace is independent. You can have as many as you want:
 
 ## Obsidian Setup
 
-The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). After running the setup script:
+The vault is designed to be opened in [Obsidian](https://obsidian.md/) (free). After running `devnexus init`:
 
 1. **Open Obsidian** -> File -> Open Vault -> select `your-vault/`
-2. **Obsidian Git plugin is pre-configured** — the setup script creates the plugin config automatically. Just enable Community Plugins in Obsidian settings and enable "Obsidian Git".
+2. **Obsidian Git plugin is pre-configured** — devnexus init creates the plugin config automatically. Just enable Community Plugins in Obsidian settings and enable "Obsidian Git".
 
 ### Pre-configured Obsidian Git settings
 
@@ -490,7 +507,7 @@ npm install -g gitnexus
 cd your-repo && npx gitnexus analyze
 ```
 
-The setup script will attempt this automatically if GitNexus is installed.
+`devnexus init` attempts this automatically if GitNexus is installed.
 
 ### What it adds
 
@@ -529,13 +546,13 @@ claude mcp add gitnexus -- npx -y gitnexus@latest mcp
 | Requirement | Required? | Purpose |
 |------------|-----------|---------|
 | `git` | Yes | Vault sync, repo cloning |
-| `bash` | Yes | Running setup and update scripts |
+| `node` (≥18) | Yes | Running devnexus |
+| `npm` | Yes | Installing devnexus |
 | [Obsidian](https://obsidian.md/) | Yes | Opening and editing the vault |
 | [Claude Code](https://claude.ai/claude-code) | Optional | Cross-repo AI reasoning |
 | [Cursor](https://cursor.com/) | Optional | Focused AI-assisted editing |
 | [Codex](https://openai.com/codex) | Optional | AI coding agent |
 | [Windsurf](https://codeium.com/windsurf) | Optional | AI coding agent |
-| `npm` | Yes | Installing and running `devnexus` |
 | `python3` | Optional | For Graphify structural analysis |
 
 ---
@@ -576,7 +593,7 @@ No. It starts blank. As you work with agents and correct their behavior, they'll
 Not by default — it's just a local directory. You can make it a git repo if you want to sync it, but it's personal (not shared with a team), so local-only is fine for most people.
 
 **How do I start a second project?**
-Run the script in a new folder. It detects your existing `~/.ai-profile/` and reuses it — your agent already knows your preferences from day one. The vault is fresh for the new project.
+Run `devnexus init` in a new folder. It detects your existing `~/.ai-profile/` and reuses it — your agent already knows your preferences from day one. The vault is fresh for the new project.
 
 **What is the contract drift check?**
 Two layers of enforcement. First, a git pre-push hook installed by `devnexus init` in each repo's `.git/hooks/` — it runs on every push automatically, scans for changes to API-related directories (`routes/`, `api/`, `controllers/`, etc.), and blocks the push if `API_CONTRACTS.md` wasn't updated. Second, `.ai-rules/03-contract-drift.md` tells agents to surface mismatches with options to fix before pushing. The hook fires regardless of which editor or agent you're using. To bypass consciously: `git push --no-verify`.
