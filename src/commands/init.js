@@ -153,14 +153,9 @@ async function runInit(opts) {
   // Step 9: Register vault in vault-map.json (for vault-encoder hook)
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
 
-  // Step 10: Graphify — prompt per repo
-  if (repoDirs.length > 0) {
-    log.step('Step 10', 'Graphify — structural codebase analysis');
-    for (const repoDir of repoDirs) {
-      const absRepoDir = path.join(workspaceDir, repoDir);
-      await promptAndRunGraphify(repoDir, absRepoDir, vaultName);
-    }
-  }
+  // Step 10: Graphify — workspace-level structural analysis
+  log.step('Step 10', 'Graphify — workspace structural analysis');
+  await promptAndRunGraphify(workspaceDir, vaultName);
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
