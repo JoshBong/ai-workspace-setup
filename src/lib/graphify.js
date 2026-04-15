@@ -1,56 +1,51 @@
-import { execSync } from 'child_process';
+import https from 'https';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { log } from './output.js';
 
-function getGraphifyBin(workspaceDir) {
-  const venvBin = path.join(workspaceDir, '.venv-graphify', 'bin', 'graphify');
-  if (fs.existsSync(venvBin)) return venvBin;
+const SKILL_URL = 'https://raw.githubusercontent.com/safishamsi/graphify/v1/skills/graphify/skill.md';
+const SKILL_PATH = path.join(os.homedir(), '.claude', 'skills', 'graphify', 'SKILL.md');
 
-  try {
-    execSync('graphify --help', { stdio: 'pipe', timeout: 5000 });
-    return 'graphify';
-  } catch {
-    return null;
-  }
-}
-
-function autoInstall(workspaceDir) {
-  log.plain('  Installing Graphify into .venv-graphify/...');
-  try {
-    execSync('python3 -m venv .venv-graphify', { cwd: workspaceDir, stdio: 'pipe' });
-    execSync('.venv-graphify/bin/pip install graphifyy --quiet', { cwd: workspaceDir, stdio: 'pipe' });
-    log.success('Graphify installed in .venv-graphify/');
-    return path.join(workspaceDir, '.venv-graphify', 'bin', 'graphify');
-  } catch (err) {
-    log.warn(`Auto-install failed: ${err.message}`);
-    log.plain('  Install manually:');
-    log.plain('    python3 -m venv .venv-graphify && source .venv-graphify/bin/activate');
-    log.plain('    pip install graphifyy');
-    return null;
-  }
+function fetchSkill() {
+  return new Promise((resolve, reject) => {
+    https.get(SKILL_URL, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        https.get(res.headers.location, (res2) => {
+          let data = '';
+          res2.on('data', chunk => data += chunk);
+          res2.on('end', () => resolve(data));
+          res2.on('error', reject);
+        }).on('error', reject);
+        return;
+      }
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(data));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
 }
 
 export async function promptAndRunGraphify(workspaceDir, vaultName) {
   console.log('');
+  log.plain('  Installing Graphify skill...');
 
-  let bin = getGraphifyBin(workspaceDir);
-  if (!bin) {
-    bin = autoInstall(workspaceDir);
-    if (!bin) return;
-  }
-
-  // Install the skill into Claude Code's global skills dir
   try {
-    execSync(`${bin} install --platform claude`, { cwd: workspaceDir, stdio: 'pipe' });
-    log.success('Graphify skill installed for Claude Code');
-  } catch {
-    // Non-fatal — skill install is optional
+    const content = await fetchSkill();
+    fs.mkdirSync(path.dirname(SKILL_PATH), { recursive: true });
+    fs.writeFileSync(SKILL_PATH, content, 'utf-8');
+    log.success('Graphify skill installed (~/.claude/skills/graphify/SKILL.md)');
+  } catch (err) {
+    log.warn(`Could not fetch Graphify skill: ${err.message}`);
+    log.plain('  Install manually: https://github.com/safishamsi/graphify');
   }
 
+  console.log('');
+  log.plain('  To generate GRAPH_REPORT.md, open Claude Code in your workspace and type:');
   log.plain('');
-  log.plain('  Graphify is a Claude Code skill. To generate GRAPH_REPORT.md:');
-  log.plain(`  1. Open Claude Code in your workspace`);
-  log.plain(`  2. Type: /graphify .`);
-  log.plain(`  3. Claude will write the report to ${vaultName}/GRAPH_REPORT.md`);
+  log.plain('    /graphify .');
+  log.plain('');
+  log.plain(`  Claude will write the report to ${vaultName}/GRAPH_REPORT.md`);
+  log.plain('  All agents read this file from the vault automatically.');
 }
