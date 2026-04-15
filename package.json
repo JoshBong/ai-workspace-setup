@@ -1,0 +1,40 @@
+{
+  "name": "ai-workspace-setup",
+  "version": "1.0.0",
+  "description": "CLI tool for setting up AI-augmented workspaces with Obsidian vault integration",
+  "type": "module",
+  "bin": {
+    "aiws": "./bin/aiws.js",
+    "ai-workspace-setup": "./bin/aiws.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "workspace",
+    "obsidian",
+    "claude",
+    "cursor",
+    "codex",
+    "windsurf",
+    "developer-tools"
+  ],
+  "author": "Joshua Huang",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JoshBong/ai-workspace-setup.git"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "inquirer": "^9.3.0"
+  }
+}
