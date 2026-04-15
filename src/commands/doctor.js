@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import chalk from 'chalk';
 import { log } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
@@ -111,7 +112,11 @@ function runDoctor(opts) {
   // 4. Vault
   const vaultDir = path.resolve(vaultName);
   if (fs.existsSync(vaultDir)) {
-    const expectedFiles = ['ARCHITECTURE.md', 'API_CONTRACTS.md', 'DECISIONS.md', 'SESSION_LOG.md'];
+    // Support both old (ARCHITECTURE.md) and new (ARCHITECTURE_OVERVIEW.md + MOC.md) layouts
+    const hasNewLayout = fs.existsSync(path.join(vaultDir, 'MOC.md'));
+    const expectedFiles = hasNewLayout
+      ? ['MOC.md', 'ARCHITECTURE_OVERVIEW.md', 'API_CONTRACTS.md', 'DECISIONS.md', 'SESSION_LOG.md', 'GRAPH_REPORT.md']
+      : ['ARCHITECTURE.md', 'API_CONTRACTS.md', 'DECISIONS.md', 'SESSION_LOG.md'];
     const missingVault = expectedFiles.filter(f => !fs.existsSync(path.join(vaultDir, f)));
 
     if (missingVault.length === 0) {
@@ -236,6 +241,40 @@ function runDoctor(opts) {
         });
       }
     }
+
+    // GitNexus index
+    const gitNexusDir = path.join(absDir, '.gitnexus');
+    const gitNexusMeta = path.join(gitNexusDir, 'meta.json');
+    if (fs.existsSync(gitNexusMeta)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(gitNexusMeta, 'utf-8'));
+        const { nodes = 0, relationships = 0 } = meta.stats || {};
+        pass(`GitNexus index: ${nodes} nodes, ${relationships} edges`);
+      } catch {
+        warn('GitNexus index exists but meta.json is unreadable', `cd ${repoDir} && npx gitnexus analyze`);
+      }
+    } else {
+      warn('No GitNexus index — agents lack blast-radius analysis', `cd ${repoDir} && npx gitnexus analyze`);
+    }
+  }
+
+  // Vault-map.json registration
+  console.log('');
+  log.bold('  vault-map.json');
+  const vaultMapPath = path.join(os.homedir(), '.claude', 'vault-map.json');
+  if (fs.existsSync(vaultMapPath)) {
+    try {
+      const vaultMap = JSON.parse(fs.readFileSync(vaultMapPath, 'utf-8'));
+      if (vaultMap[vaultName]) {
+        pass(`${vaultName} registered in ~/.claude/vault-map.json`);
+      } else {
+        warn(`${vaultName} not in vault-map.json — vault-encoder hook won't inject context`, `Add to ~/.claude/vault-map.json: "${vaultName}": "${path.resolve(vaultName)}"`);
+      }
+    } catch {
+      warn('vault-map.json exists but is not valid JSON');
+    }
+  } else {
+    warn('~/.claude/vault-map.json not found — vault-encoder hook disabled');
   }
 
   // Summary

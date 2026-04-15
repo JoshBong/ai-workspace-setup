@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { execSync } from 'child_process';
 import { log } from '../lib/output.js';
 import { writeConfig, readConfig } from '../lib/config.js';
@@ -16,6 +17,7 @@ import * as obsidianTemplates from '../templates/obsidian.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
+import { installContractHook } from '../lib/hooks.js';
 
 export function initCommand() {
   const cmd = new Command('init')
@@ -144,8 +146,14 @@ async function runInit(opts) {
   });
   log.success('Saved .workspace-config');
 
-  // Step 8: GitNexus (optional)
+  // Step 8: GitNexus (optional — per repo code graph)
   checkGitNexus(repoDirs, workspaceDir);
+
+  // Step 9: Register vault in vault-map.json (for vault-encoder hook)
+  registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
+
+  // Step 10: Graphify instructions
+  printGraphifyInstructions(vaultName);
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
@@ -212,12 +220,15 @@ function createVault({ vaultName, projectName, description, techStack, author, d
   writeFile(path.join(vaultDir, '.gitignore'), obsidianTemplates.vaultGitignore());
 
   // Vault content
-  writeFile(path.join(vaultDir, 'ARCHITECTURE.md'), vaultTemplates.architecture({ projectName, description, techStack, date }));
+  const repos = []; // populated later — MOC updated post-clone
+  writeFile(path.join(vaultDir, 'MOC.md'), vaultTemplates.moc({ projectName, vaultName, repos, date }));
+  writeFile(path.join(vaultDir, 'ARCHITECTURE_OVERVIEW.md'), vaultTemplates.architecture({ projectName, description, techStack, date }));
   writeFile(path.join(vaultDir, 'API_CONTRACTS.md'), vaultTemplates.apiContracts({ date }));
   writeFile(path.join(vaultDir, 'DECISIONS.md'), vaultTemplates.decisions({ date, author }));
   writeFile(path.join(vaultDir, 'SESSION_LOG.md'), vaultTemplates.sessionLog());
+  writeFile(path.join(vaultDir, 'GRAPH_REPORT.md'), vaultTemplates.graphReport({ projectName, date }));
 
-  log.success(`Created ${vaultName}/ with ARCHITECTURE.md, API_CONTRACTS.md, DECISIONS.md, SESSION_LOG.md`);
+  log.success(`Created ${vaultName}/ with MOC.md, ARCHITECTURE_OVERVIEW.md, GRAPH_REPORT.md, API_CONTRACTS.md, DECISIONS.md, SESSION_LOG.md`);
 
   // Init git in vault
   if (!isGitRepo(vaultDir)) {
@@ -284,6 +295,14 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
 
   log.success('Created .ai-rules/');
 
+  // Install contract drift pre-push hook
+  const hookResult = installContractHook(absRepoDir, vaultName);
+  if (hookResult.installed) {
+    log.success('Installed contract drift pre-push hook');
+  } else {
+    log.warn(`Pre-push hook: ${hookResult.reason}`);
+  }
+
   // Create pointer files
   for (const agent of agents) {
     const filename = getPointerFilename(agent);
@@ -306,21 +325,68 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
 
 function checkGitNexus(repoDirs, workspaceDir) {
   console.log('');
+  let hasGitNexus = false;
   try {
-    execSync('which gitnexus', { stdio: 'pipe' });
+    execSync('npx gitnexus --version', { stdio: 'pipe', timeout: 10000 });
+    hasGitNexus = true;
+  } catch { /* not available */ }
+
+  if (hasGitNexus) {
+    log.step('Step 8', 'Indexing repos with GitNexus');
     for (const repoDir of repoDirs) {
       const abs = path.join(workspaceDir, repoDir);
       if (fs.existsSync(abs)) {
-        log.plain(`Indexing ${repoDir} with GitNexus...`);
+        log.plain(`  Indexing ${repoDir}...`);
         try {
-          execSync('npx gitnexus analyze', { cwd: abs, stdio: 'pipe' });
-        } catch { /* non-critical */ }
+          execSync('npx gitnexus analyze', { cwd: abs, stdio: 'pipe', timeout: 120000 });
+          log.success(`GitNexus index built for ${repoDir}`);
+        } catch { log.warn(`GitNexus indexing failed for ${repoDir} — run manually: npx gitnexus analyze`); }
       }
     }
-  } catch {
-    log.warn('GitNexus not installed. This is optional but recommended.');
-    log.warn('Install: npm install -g gitnexus');
+  } else {
+    log.step('Step 8', 'GitNexus (skipped — not installed)');
+    log.warn('GitNexus gives agents blast-radius analysis and safe renames.');
+    log.warn('Install: npm install -g gitnexus  then run: npx gitnexus analyze');
   }
+}
+
+function registerVaultMap(vaultName, vaultAbsPath) {
+  const vaultMapPath = path.join(os.homedir(), '.claude', 'vault-map.json');
+  let map = {};
+  try {
+    map = JSON.parse(fs.readFileSync(vaultMapPath, 'utf-8'));
+  } catch { /* create fresh */ }
+
+  if (map[vaultName]) {
+    log.success(`Vault already registered in vault-map.json`);
+    return;
+  }
+
+  map[vaultName] = vaultAbsPath;
+  try {
+    fs.mkdirSync(path.dirname(vaultMapPath), { recursive: true });
+    fs.writeFileSync(vaultMapPath, JSON.stringify(map, null, 2) + '\n');
+    log.success(`Registered ${vaultName} in ~/.claude/vault-map.json`);
+    log.plain('  Vault-encoder hook will now inject vault context into every session.');
+  } catch (err) {
+    log.warn(`Could not write vault-map.json: ${err.message}`);
+  }
+}
+
+function printGraphifyInstructions(vaultName) {
+  console.log('');
+  log.step('Step 10', 'Graphify — structural codebase analysis (optional)');
+  log.plain('  Graphify maps your entire codebase into a graph (nodes, edges, communities)');
+  log.plain('  and outputs GRAPH_REPORT.md to your vault. Run it once on large codebases.');
+  console.log('');
+  log.plain('  Quick start (AST-only, free):');
+  log.plain('    python3 -m venv .venv-graphify');
+  log.plain('    source .venv-graphify/bin/activate');
+  log.plain('    pip install graphifyy');
+  log.plain(`    graphify ./ --no-semantic --output ./${vaultName}/GRAPH_REPORT.md`);
+  console.log('');
+  log.plain('  Full semantic run (uses Claude tokens, richer output):');
+  log.plain(`    graphify ./ --output ./${vaultName}/GRAPH_REPORT.md`);
 }
 
 function printDryRun({ projectName, vaultName, repoInputs, agents, workspaceDir }) {
@@ -364,7 +430,9 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   }
 
   console.log(`  |-- ${vaultName}/`);
-  console.log('  |   |-- ARCHITECTURE.md      <- How your system works');
+  console.log('  |   |-- MOC.md               <- Entry point — read this first each session');
+  console.log('  |   |-- ARCHITECTURE_OVERVIEW.md  <- How your system works');
+  console.log('  |   |-- GRAPH_REPORT.md      <- Structural analysis (populate with Graphify)');
   console.log('  |   |-- API_CONTRACTS.md     <- Endpoint shapes');
   console.log('  |   |-- DECISIONS.md         <- What was tried and why');
   console.log('  |   |-- SESSION_LOG.md       <- Session handoff notes');
@@ -372,12 +440,14 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   for (const repoDir of repoDirs) {
     console.log(`  |-- ${repoDir}/`);
     console.log('  |   |-- .ai-rules/           <- Agent instructions');
+    console.log('  |   |-- .gitnexus/           <- Code knowledge graph (GitNexus)');
   }
 
   console.log('\nNext steps:\n');
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
-  console.log('  3. Fill in ARCHITECTURE.md with how your project works');
-  console.log('  4. Start coding — your agents will read .ai-rules/ automatically');
-  console.log("  5. To update rules after a new release: aiws update\n");
+  console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
+  console.log('  4. Run Graphify to generate GRAPH_REPORT.md (see Step 10 output above)');
+  console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
+  console.log("  6. To update rules after a new release: aiws update\n");
 }

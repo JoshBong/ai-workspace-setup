@@ -8,6 +8,7 @@ import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { gitClone } from '../lib/git.js';
 import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
+import { installContractHook } from '../lib/hooks.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointerTemplates from '../templates/pointers.js';
 
@@ -80,6 +81,14 @@ async function runAdd(repos, opts) {
     writeFile(path.join(rulesDir, '04-operator-profile.md'), repoRules.operatorProfile());
     writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
     log.success(`Created ${dirName}/.ai-rules/`);
+
+    // Install contract drift pre-push hook
+    const hookResult = installContractHook(absDir, vaultName);
+    if (hookResult.installed) {
+      log.success('Installed contract drift pre-push hook');
+    } else {
+      log.warn(`Pre-push hook: ${hookResult.reason}`);
+    }
 
     // Create pointer files
     for (const agent of agents) {

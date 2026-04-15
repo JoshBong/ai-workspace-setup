@@ -6,6 +6,7 @@ import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { ensureDir, writeFile } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION } from '../constants.js';
+import { installContractHook } from '../lib/hooks.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 
@@ -137,4 +138,9 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack }) {
   writeFile(path.join(rulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));
   writeFile(path.join(rulesDir, '04-operator-profile.md'), repoRules.operatorProfile());
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
+
+  const hookResult = installContractHook(absRepoDir, vaultName);
+  if (hookResult.installed) {
+    log.success(`${path.basename(absRepoDir)}: contract drift hook ${hookResult.updated ? 'updated' : 'installed'}`);
+  }
 }

@@ -5,7 +5,7 @@ You are an expert engineer working on ${projectName}. This is ${repoStack}.
 
 The Obsidian vault at \`../${vaultName}/\` is the single source of truth for architecture, API contracts, and decisions. Always check there first before writing code.
 
-- **Architecture:** \`../${vaultName}/ARCHITECTURE.md\`
+- **Architecture:** \`../${vaultName}/ARCHITECTURE_OVERVIEW.md\`
 - **API contracts:** \`../${vaultName}/API_CONTRACTS.md\` — the final authority on endpoint shapes
 - **Decisions:** \`../${vaultName}/DECISIONS.md\` — rejected approaches and why
 `;

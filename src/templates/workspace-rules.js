@@ -13,12 +13,20 @@ Before reading the vault, read these files to understand who you're working with
 
 Read these vault files before doing anything else:
 
-1. \`./${vaultName}/ARCHITECTURE.md\` — system design and how repos connect
-2. \`./${vaultName}/API_CONTRACTS.md\` — endpoint shapes (the final authority)
-3. \`./${vaultName}/DECISIONS.md\` — rejected approaches and why; check before proposing alternatives
-4. \`./${vaultName}/SESSION_LOG.md\` — where the last session left off
+1. \`./${vaultName}/MOC.md\` — map of content, entry point, session start sequence
+2. \`./${vaultName}/DECISIONS.md\` — rejected approaches and why; check before proposing alternatives
+3. \`./${vaultName}/SESSION_LOG.md\` — where the last session left off
+4. \`./${vaultName}/ARCHITECTURE_OVERVIEW.md\` — system design and how repos connect (read on demand)
 
 Do not suggest code changes until you have read all of the above.
+
+## Code Intelligence (GitNexus)
+
+If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is available:
+- Before editing any function/class: run \`gitnexus_impact({target: "symbolName", direction: "upstream"})\`
+- For architecture questions: run \`gitnexus_query({query: "concept"})\`
+- Before committing: run \`gitnexus_detect_changes({scope: "staged"})\`
+- Never rename symbols with find-and-replace — use \`gitnexus_rename\` instead
 `;
 }
 
@@ -31,7 +39,7 @@ After completing work, check whether the vault needs updating before ending the 
 - An endpoint's request or response shape changed
 - A new endpoint was added or removed
 
-## Always update \`ARCHITECTURE.md\` when:
+## Always update \`ARCHITECTURE_OVERVIEW.md\` when:
 - A key data structure was added or changed
 - A new repo or service was added
 - A known gap was resolved or a new one discovered

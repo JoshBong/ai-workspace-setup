@@ -1,5 +1,5 @@
 {
-  "name": "ai-workspace-setup",
+  "name": "aiws",
   "version": "1.0.0",
   "description": "CLI tool for setting up AI-augmented workspaces with Obsidian vault integration",
   "type": "module",

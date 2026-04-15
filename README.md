@@ -54,7 +54,8 @@ your-workspace/
 ├── ai-profile/               <- Symlink -> ~/.ai-profile/
 ├── CLAUDE.md                 <- User-owned pointer (+ your custom notes)
 ├── your-vault/               <- Obsidian vault (shared brain)
-│   ├── ARCHITECTURE.md
+│   ├── ARCHITECTURE_OVERVIEW.md
+│   ├── GRAPH_REPORT.md
 │   ├── API_CONTRACTS.md
 │   ├── DECISIONS.md
 │   └── SESSION_LOG.md
@@ -76,12 +77,20 @@ your-workspace/
 ## Quick Start
 
 ```bash
+npm install -g aiws
+
 mkdir my-workspace && cd my-workspace
-curl -sO https://raw.githubusercontent.com/JoshBong/ai-workspace-setup/main/setup-workspace.sh
-bash setup-workspace.sh
+aiws init
 ```
 
-The script prompts you for:
+Or without a global install:
+
+```bash
+mkdir my-workspace && cd my-workspace
+npx aiws init
+```
+
+`aiws init` prompts you for:
 1. **Project name** — names the vault and workspace
 2. **Repo URLs** — paste as many as you want (git URLs or existing folder names), press Enter when done
 3. **Agents** — select which agents you use: Claude Code, Cursor, Codex, Windsurf (generates the right pointer files for each)
@@ -89,7 +98,7 @@ The script prompts you for:
 5. **Tech stack** — auto-detected per repo, but you can describe the overall stack
 6. **Your name** — for decision log attribution
 
-The script saves your choices to `.workspace-config` so future updates can regenerate files without re-prompting.
+`aiws` saves your choices to `.workspace-config` so future updates can regenerate files without re-prompting.
 
 ---
 
@@ -186,7 +195,7 @@ Every AI session starts by burning tokens on context. Without a shared vault, yo
 
 | Without vault | With vault |
 |--------------|------------|
-| "We're building a booking platform with Next.js frontend and FastAPI backend, they connect through proxy routes at..." (200+ tokens, every session) | Agent reads `ARCHITECTURE.md` once, already knows (0 tokens of re-explanation) |
+| "We're building a booking platform with Next.js frontend and FastAPI backend, they connect through proxy routes at..." (200+ tokens, every session) | Agent reads `ARCHITECTURE_OVERVIEW.md` once, already knows (0 tokens of re-explanation) |
 | "Don't use Redis, we already tried that" (50 tokens, repeated across engineers) | Agent reads `DECISIONS.md`, already knows (0 tokens) |
 | "The auth flow works like this..." (300+ tokens explaining patterns) | Agent reads `.ai-rules/`, already knows the auth pattern for each role (0 tokens) |
 | Agent suggests a change, breaks the other repo, you spend 20 minutes debugging | Agent reads `API_CONTRACTS.md`, knows the exact response shape the other repo expects |
@@ -258,7 +267,8 @@ Created at the workspace root and inside each repo. Contains modular rule files 
 
 | File | Purpose | When to update |
 |------|---------|----------------|
-| `ARCHITECTURE.md` | How your system works — repos, data flow, key structures | When you add a service, change how repos connect, or discover a structural gap |
+| `ARCHITECTURE_OVERVIEW.md` | How your system works — repos, data flow, key structures | When you add a service, change how repos connect, or discover a structural gap |
+| `GRAPH_REPORT.md` | Structural analysis from Graphify — god nodes, communities, bridges | After running Graphify on the codebase |
 | `API_CONTRACTS.md` | Every endpoint shape — request, response, errors | When any endpoint changes. This file is the final authority. |
 | `DECISIONS.md` | Rejected approaches and non-obvious choices | Automatically prompted by agents mid-session |
 | `SESSION_LOG.md` | Two-line session handoff notes | At the end of each session, so the next one picks up where you left off |
@@ -308,36 +318,38 @@ The script reads your repo files and tailors the rules to the right framework:
 
 ## Updating Your Workspace
 
-When you pull a new release of this project, run the update script to get the latest agent rules:
+When a new version of `aiws` is released, run:
 
 ```bash
+npm update -g aiws
 cd my-workspace
-bash update-workspace.sh
+aiws update
 ```
 
-This regenerates all `.ai-rules/` directories (workspace root and every repo) using the latest rule files from the release. It reads `.workspace-config` to know your project structure.
+This regenerates all `.ai-rules/` directories and reinstalls git hooks using the latest templates. It reads `.workspace-config` to know your project structure.
 
 **What gets updated:**
 - `.ai-rules/` contents in workspace root and all repos
 - `version.txt` inside each `.ai-rules/`
+- Contract drift pre-push hook in each repo's `.git/hooks/`
 
 **What is never touched:**
 - Pointer files (`CLAUDE.md`, `.cursorrules`, `AGENTS.md`, `.windsurfrules`) — your custom notes are safe
-- Vault contents (`ARCHITECTURE.md`, `API_CONTRACTS.md`, `DECISIONS.md`, `SESSION_LOG.md`)
+- Vault contents (`ARCHITECTURE_OVERVIEW.md`, `API_CONTRACTS.md`, `DECISIONS.md`, `SESSION_LOG.md`)
 - AI profile (`~/.ai-profile/`)
 - `.workspace-config`
 
-You can run `update-workspace.sh` as often as you want. It's idempotent.
+`aiws update` is idempotent — safe to run as often as you want.
 
 ---
 
 ## Starting a New Project
 
-When you start a new project, run the script again in a new folder:
+When you start a new project, run `aiws init` in a new folder:
 
 ```bash
 mkdir new-project && cd new-project
-bash setup-workspace.sh
+aiws init
 ```
 
 The script detects your existing AI profile at `~/.ai-profile/` and skips creation. Your new workspace gets a fresh vault (new architecture, new decisions, new contracts) but your agent already knows how you work — your preferences, working style, and past corrections carry over automatically.
@@ -523,7 +535,7 @@ claude mcp add gitnexus -- npx -y gitnexus@latest mcp
 | [Cursor](https://cursor.com/) | Optional | Focused AI-assisted editing |
 | [Codex](https://openai.com/codex) | Optional | AI coding agent |
 | [Windsurf](https://codeium.com/windsurf) | Optional | AI coding agent |
-| `npm` | Optional | For GitNexus code indexing |
+| `npm` | Yes | Installing and running `aiws` |
 | `python3` | Optional | For Graphify structural analysis |
 
 ---
@@ -540,10 +552,10 @@ Claude Code, Cursor, Codex, and Windsurf. The setup script asks which ones you u
 It's a directory of modular rule files that your agents read on every session start. It's managed by the setup and update scripts — don't hand-edit it. Your customizations belong in the pointer files (`CLAUDE.md`, `.cursorrules`, etc.), which are never overwritten.
 
 **How do I add a new agent later?**
-Either re-run `setup-workspace.sh` or manually create the pointer file (e.g., `.windsurfrules`) with a line telling the agent to read `.ai-rules/`. The rules themselves are agent-agnostic.
+Run `aiws agent add windsurf` (or `cursor`, `codex`). To see what's installed: `aiws agent ls`. To remove: `aiws agent rm cursor`. The rules themselves are agent-agnostic — pointer files are just thin wrappers that point to `.ai-rules/`.
 
 **How do I get updated rules?**
-Pull the latest release, then run `bash update-workspace.sh` from your workspace root. This regenerates all `.ai-rules/` directories without touching your pointer files, vault, or profile.
+Run `npm update -g aiws` then `aiws update` from your workspace root. This regenerates all `.ai-rules/` directories and git hooks without touching your pointer files, vault, or profile.
 
 **What is `.workspace-config`?**
 A file saved during setup that stores your project name, vault name, repo list, and selected agents. The update script reads it so it can regenerate `.ai-rules/` without re-prompting you.
@@ -567,7 +579,7 @@ Not by default — it's just a local directory. You can make it a git repo if yo
 Run the script in a new folder. It detects your existing `~/.ai-profile/` and reuses it — your agent already knows your preferences from day one. The vault is fresh for the new project.
 
 **What is the contract drift check?**
-A pre-push check defined in `.ai-rules/03-contract-drift.md`. When your agent is about to push code, it diffs the code against `API_CONTRACTS.md` to catch mismatches — like when you change an endpoint response shape but forget to update the contract. The agent surfaces the mismatch and gives you options to fix it before pushing.
+Two layers of enforcement. First, a git pre-push hook installed by `aiws init` in each repo's `.git/hooks/` — it runs on every push automatically, scans for changes to API-related directories (`routes/`, `api/`, `controllers/`, etc.), and blocks the push if `API_CONTRACTS.md` wasn't updated. Second, `.ai-rules/03-contract-drift.md` tells agents to surface mismatches with options to fix before pushing. The hook fires regardless of which editor or agent you're using. To bypass consciously: `git push --no-verify`.
 
 **Can I add non-code docs to the vault?**
 Keep the vault lean. It should contain only files that help agents write better code. Business docs, pitch decks, and partner lists belong elsewhere — they dilute the signal agents read on every session start.
