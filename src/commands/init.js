@@ -17,7 +17,7 @@ import * as obsidianTemplates from '../templates/obsidian.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
-import { installContractHook } from '../lib/hooks.js';
+import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
 import { promptAndRunGraphify } from '../lib/graphify.js';
 
 export function initCommand() {
@@ -304,6 +304,14 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
     log.warn(`Pre-push hook: ${hookResult.reason}`);
   }
 
+  // Install GitNexus post-commit hook
+  const gnHookResult = installGitNexusHook(absRepoDir);
+  if (gnHookResult.installed) {
+    log.success('Installed GitNexus post-commit hook');
+  } else {
+    log.warn(`GitNexus hook: ${gnHookResult.reason}`);
+  }
+
   // Create pointer files
   for (const agent of agents) {
     const filename = getPointerFilename(agent);
@@ -433,7 +441,7 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  console.log('  4. GRAPH_REPORT.md is in the vault — rerun Graphify anytime to refresh it');
+  console.log('  4. Rerun Graphify anytime: devnexus graphify');
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
   console.log("  6. To update rules after a new release: devnexus update\n");
 }

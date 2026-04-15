@@ -9,7 +9,7 @@ import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { gitClone } from '../lib/git.js';
 import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
-import { installContractHook } from '../lib/hooks.js';
+import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
 import { promptAndRunGraphify } from '../lib/graphify.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointerTemplates from '../templates/pointers.js';
@@ -90,6 +90,14 @@ async function runAdd(repos, opts) {
       log.success('Installed contract drift pre-push hook');
     } else {
       log.warn(`Pre-push hook: ${hookResult.reason}`);
+    }
+
+    // Install GitNexus post-commit hook
+    const gnHookResult = installGitNexusHook(absDir);
+    if (gnHookResult.installed) {
+      log.success('Installed GitNexus post-commit hook');
+    } else {
+      log.warn(`GitNexus hook: ${gnHookResult.reason}`);
     }
 
     // Create pointer files

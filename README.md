@@ -63,6 +63,7 @@ devnexus init                     set up a new AI-augmented workspace
 devnexus update                   regenerate .ai-rules/ and git hooks with latest templates
 devnexus add <repo>               add a repo to an existing workspace
 devnexus remove <repo>            remove a repo from workspace tracking
+devnexus graphify                 re-run Graphify structural analysis on the workspace
 devnexus status                   workspace health dashboard
 devnexus doctor                   deep diagnostic
 devnexus doctor --fix             auto-repair common issues
@@ -197,10 +198,16 @@ When Engineer A discovers something, it's available to Engineer B's agent within
 
 [Graphify](https://github.com/safishamsi/graphify) maps your entire workspace into a graph — god nodes, communities, bridges, knowledge gaps — and writes `GRAPH_REPORT.md` to the vault.
 
-`devnexus init` and `devnexus add` both prompt you to run it. It runs **once across the whole workspace** (not per repo), so the graph shows how all your repos connect.
+`devnexus init` and `devnexus add` both prompt you to run it. It runs **once across the whole workspace** (not per repo), so the graph shows how all your repos connect. Rerun anytime:
 
 ```bash
-# Install
+devnexus graphify
+```
+
+Or manually:
+
+```bash
+# Install (once)
 python3 -m venv .venv-graphify
 source .venv-graphify/bin/activate
 pip install graphifyy
@@ -233,10 +240,12 @@ devnexus writes a `.graphifyignore` at the workspace root before each run to exc
 
 ```bash
 npm install -g gitnexus
+
+# Index a repo manually
 cd your-repo && npx gitnexus analyze
 ```
 
-`devnexus init` and `devnexus add` run this automatically if GitNexus is installed.
+`devnexus init` and `devnexus add` run this automatically if GitNexus is installed, and install a post-commit hook in each repo that keeps the index fresh after every commit.
 
 **Claude Code:**
 ```bash

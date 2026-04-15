@@ -2,6 +2,16 @@ import fs from 'fs';
 import path from 'path';
 
 const HOOK_MARKER = '# devnexus: contract-drift-hook';
+const GITNEXUS_HOOK_MARKER = '# devnexus: gitnexus-hook';
+
+function gitNexusHookScript() {
+  return `#!/usr/bin/env bash
+${GITNEXUS_HOOK_MARKER}
+# Rebuilds GitNexus knowledge graph after every commit.
+# To disable: remove this file or delete these lines.
+npx gitnexus analyze 2>/dev/null || true
+`;
+}
 
 function hookScript(vaultName) {
   return `#!/usr/bin/env bash
@@ -78,6 +88,33 @@ export function installContractHook(repoAbsDir, vaultName) {
       return { installed: true, updated: true };
     }
     return { installed: false, reason: 'pre-push hook already exists (not managed by devnexus)' };
+  }
+
+  fs.writeFileSync(hookPath, script);
+  fs.chmodSync(hookPath, '755');
+  return { installed: true, updated: false };
+}
+
+export function installGitNexusHook(repoAbsDir) {
+  const gitDir = path.join(repoAbsDir, '.git');
+  if (!fs.existsSync(gitDir)) return { installed: false, reason: 'not a git repo' };
+
+  const hooksDir = path.join(gitDir, 'hooks');
+  if (!fs.existsSync(hooksDir)) {
+    fs.mkdirSync(hooksDir, { recursive: true });
+  }
+
+  const hookPath = path.join(hooksDir, 'post-commit');
+  const script = gitNexusHookScript();
+
+  if (fs.existsSync(hookPath)) {
+    const existing = fs.readFileSync(hookPath, 'utf-8');
+    if (existing.includes(GITNEXUS_HOOK_MARKER)) {
+      fs.writeFileSync(hookPath, script);
+      fs.chmodSync(hookPath, '755');
+      return { installed: true, updated: true };
+    }
+    return { installed: false, reason: 'post-commit hook already exists (not managed by devnexus)' };
   }
 
   fs.writeFileSync(hookPath, script);
