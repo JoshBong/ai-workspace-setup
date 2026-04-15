@@ -307,4 +307,4 @@ Agents `git pull` before writing and push immediately after. If a conflict still
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and noncommercial use. Contact [Joshua Huang](https://github.com/JoshBong) for commercial licensing.
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and noncommercial use. Contact [Joshua Huang](https://www.linkedin.com/in/jhuang314/) for commercial licensing.
