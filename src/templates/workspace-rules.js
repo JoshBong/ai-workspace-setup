@@ -74,6 +74,12 @@ What was considered and why it was rejected/chosen. Two sentences max.
 
 **After writing:** Run \`cd ${vaultName} && git add DECISIONS.md && git commit -m "decision: [short title]" && git push\`
 
+## Suggest running \`devnexus graphify\` when:
+- \`ARCHITECTURE_OVERVIEW.md\` describes things that don't match the actual code
+- \`GRAPH_REPORT.md\` seems outdated after many files have changed
+- The user asks about blast radius, god nodes, or structural dependencies and the report is stale
+- After a major refactor that reorganized significant parts of the codebase
+
 ## Natural triggers — check the vault after:
 - A feature is complete and ready to commit
 - The user says anything like "done", "ship it", "commit", "that's it for now"

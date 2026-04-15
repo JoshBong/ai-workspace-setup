@@ -64,6 +64,7 @@ devnexus update                   regenerate .ai-rules/ and git hooks with lates
 devnexus add <repo>               add a repo to an existing workspace
 devnexus remove <repo>            remove a repo from workspace tracking
 devnexus graphify                 re-run Graphify structural analysis on the workspace
+devnexus gitnexus                 run gitnexus analyze on every repo in the workspace
 devnexus status                   workspace health dashboard
 devnexus doctor                   deep diagnostic
 devnexus doctor --fix             auto-repair common issues

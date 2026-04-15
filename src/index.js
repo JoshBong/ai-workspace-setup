@@ -12,6 +12,7 @@ import { removeCommand } from './commands/remove.js';
 import { agentCommand } from './commands/agent.js';
 import { doctorCommand } from './commands/doctor.js';
 import { graphifyCommand } from './commands/graphify.js';
+import { gitnexusCommand } from './commands/gitnexus.js';
 
 export function createProgram() {
   const program = new Command();
@@ -29,6 +30,7 @@ export function createProgram() {
   program.addCommand(agentCommand());
   program.addCommand(doctorCommand());
   program.addCommand(graphifyCommand());
+  program.addCommand(gitnexusCommand());
 
   return program;
 }
