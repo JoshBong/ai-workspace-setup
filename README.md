@@ -167,6 +167,17 @@ One engineer's discovery is every engineer's context — within minutes, not mee
 | 2-5 engineers | Same mistakes made twice, knowledge silos | Decisions shared in real-time |
 | New hire | Weeks of onboarding | Agent reads vault, productive on day one |
 
+**Joining an existing workspace:**
+
+```bash
+devnexus init
+# "Do you have an existing project vault?" → Yes
+# Provide the vault git URL or folder name
+# Add your repos, pick your agents — done
+```
+
+The vault is never modified during join. Your team's decisions and architecture stay intact.
+
 ---
 
 ## Optional Integrations
@@ -176,7 +187,7 @@ devnexus works on its own. These tools add deeper code intelligence if you want 
 | Tool | What it adds | How to use |
 |------|-------------|------------|
 | [Graphify](https://github.com/safishamsi/graphify) | Structural analysis — god nodes, communities, bridges → `GRAPH_REPORT.md` | `devnexus graphify` (fetches + runs automatically) |
-| [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Code intelligence — blast radius, execution flows, safe renames via MCP | `npm install -g gitnexus` (devnexus runs it automatically if installed) |
+| [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Code intelligence — blast radius, execution flows, safe renames via MCP | Prompted during `devnexus init` — auto-installs if you say yes |
 | `devnexus index` | Writes the GitNexus graph into the vault as browsable Obsidian files | Built-in command, no extra install |
 
 None of these are required to get started. For details on each: [Integrations Guide](docs/INTEGRATIONS.md)
@@ -219,7 +230,7 @@ The plugin is pre-configured by `devnexus init` — auto-commit and auto-pull ev
 ## FAQ
 
 **Do I need to install GitNexus or Graphify separately?**
-No. They're optional and run automatically if installed. `npm install -g devnexus` + [Obsidian](https://obsidian.md/) are the only setup steps.
+No. `devnexus init` prompts to install GitNexus for you, and Graphify is fetched automatically. `npm install -g devnexus` + [Obsidian](https://obsidian.md/) are the only setup steps.
 
 **Can I use this with one repo?**
 Yes. The vault still adds value as persistent memory — decisions, architecture, and contracts survive between sessions.
