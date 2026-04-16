@@ -51,8 +51,6 @@ my-project/
 
 ## Example Setup
 
-Setting up a workspace for a project with a Next.js frontend and FastAPI backend:
-
 ```bash
 npm install -g devnexus
 
@@ -62,16 +60,16 @@ devnexus init
 
 ```
 ? Do you have an existing project vault? (joining a team) No
-? What's your project called? acme-app
-? Describe your project: Restaurant booking platform with AI recommendations
-? What's your tech stack? Next.js + FastAPI + Supabase
-? What's your name? Sarah
+? What's your project called? example-app
+? Describe your project: example app details
+? What's your tech stack? Next.js + FastAPI + Supabase (or auto detect)
+? What's your name? Josh
 
 Add repos by git URL, folder name, or absolute path.
 Press Enter on an empty line when done.
 
-? Repo: https://github.com/acme/frontend.git
-? Repo: https://github.com/acme/backend.git
+? Repo: https://github.com/example-app/frontend.git
+? Repo: https://github.com/example-app/backend.git
 ? Repo: (enter)
 
 ? Which AI agents do you use?
@@ -85,7 +83,7 @@ That's it. Your workspace now looks like:
 
 ```
 acme-app/
-├── acme-app-vault/     shared brain — decisions, architecture, contracts
+├── example-app-vault/     shared brain — decisions, architecture, contracts
 ├── frontend/           cloned, with .ai-rules/ and CLAUDE.md
 ├── backend/            cloned, with .ai-rules/ and CLAUDE.md
 ├── .ai-rules/          workspace-level agent instructions
@@ -93,7 +91,7 @@ acme-app/
 └── .workspace-config   devnexus tracks everything here
 ```
 
-Next: open `acme-app-vault/` in Obsidian, fill in `ARCHITECTURE_OVERVIEW.md`, and run `devnexus index` to generate the code graph. Start coding — your agents read the vault before every session.
+Next: open `example-app-vault/` in Obsidian, fill in `ARCHITECTURE_OVERVIEW.md`, and run `devnexus index` to generate the code graph. Start coding — your agents read the vault before every session.
 
 ---
 
