@@ -19,6 +19,7 @@ import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
 import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
+import { installCompletion } from '../lib/completion.js';
 
 export function initCommand() {
   const cmd = new Command('init')
@@ -161,6 +162,9 @@ async function runInit(opts) {
 
   // Step 9: Register vault in vault-map.json (for vault-encoder hook)
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
+
+  // Tab completion
+  await installCompletion();
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
