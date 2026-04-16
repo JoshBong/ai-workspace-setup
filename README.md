@@ -14,24 +14,26 @@ Multi-dev AI engineering made easy.
 
 ---
 
+A workspace is a folder for one project. If your project has multiple repos that talk to each other — a frontend, a backend, a shared library — they all go in the same workspace. devnexus creates an Obsidian vault alongside them that acts as the shared brain. Your agents read it before writing any code.
+
 ```bash
 npm install -g devnexus
 
-mkdir my-workspace && cd my-workspace
+mkdir my-project && cd my-project
 devnexus init
 ```
 
 That's it. Everything below is created automatically.
 
 ```
-your-workspace/
+my-project/
 ├── .ai-rules/                    agent instructions — auto-updated by devnexus
 ├── ai-profile/                   symlink → ~/.ai-profile/ (global, persists across projects)
 ├── CLAUDE.md                     yours to customize — never overwritten
 ├── your-vault/                   Obsidian vault — shared brain
 │   ├── MOC.md                    entry point, read every session
 │   ├── ARCHITECTURE_OVERVIEW.md
-│   ├── GRAPH_REPORT.md           structural analysis from Graphify
+│   ├── GRAPH_REPORT.md           structural analysis — god nodes (BC), bridges, gaps
 │   ├── NODE_INDEX.md             navigable code graph — god nodes, communities
 │   ├── nodes/                    per-community symbol files (from devnexus index)
 │   ├── API_CONTRACTS.md          endpoint shapes — final authority
@@ -57,7 +59,7 @@ devnexus gives every agent a vault they read before writing any code. Decisions,
 - **Shared memory** — decisions, architecture, and contracts survive across sessions and engineers
 - **Cross-repo awareness** — sees how frontend, backend, and database connect through `API_CONTRACTS.md`
 - **Decision history** — reads every rejected approach in `DECISIONS.md` before suggesting anything
-- **Code graph** — navigable god nodes, communities, and symbol files in the vault via `devnexus index`
+- **Code graph** — god nodes (by betweenness centrality), communities, bridges, knowledge gaps via `devnexus index`
 - **Contract enforcement** — pre-push git hook blocks pushes when API dirs change without updating `API_CONTRACTS.md`
 - **Session continuity** — reads `SESSION_LOG.md` to pick up exactly where the last session left off
 - **Personal profile** — reads `~/.ai-profile/` for your style, preferences, and past corrections
@@ -69,11 +71,11 @@ devnexus gives every agent a vault they read before writing any code. Decisions,
 ```
 devnexus init                     set up a new AI-augmented workspace
 devnexus update                   regenerate .ai-rules/ and git hooks with latest templates
-devnexus add <repo>               add a repo to an existing workspace
+devnexus add <repo>               add a repo (HTTPS, SSH, or local folder)
 devnexus remove <repo>            remove a repo from workspace tracking
-devnexus graphify                 re-run Graphify structural analysis on the workspace
-devnexus gitnexus                 run gitnexus analyze on every repo in the workspace
-devnexus index                    build navigable code graph in the vault
+devnexus analyze [target]         run GitNexus analyze (all repos or specific repo)
+devnexus index                    build code graph, structural analysis, GRAPH_REPORT.md
+devnexus index --force            rebuild even if index is up to date
 devnexus status                   workspace health dashboard
 devnexus doctor                   deep diagnostic
 devnexus doctor --fix             auto-repair common issues
@@ -120,7 +122,7 @@ devnexus sets up two things: a **vault** (shared brain) and **agent rules** (ins
 |------|---------|----------------|
 | `MOC.md` | Entry point — read this first every session | Automatically on `devnexus add` |
 | `ARCHITECTURE_OVERVIEW.md` | How your system works | When you add a service or change how repos connect |
-| `GRAPH_REPORT.md` | Structural analysis — god nodes, communities, bridges | After running Graphify |
+| `GRAPH_REPORT.md` | Structural analysis — god nodes (BC), bridges, knowledge gaps, graph diff | After running `devnexus index` |
 | `NODE_INDEX.md` | Navigable code graph — god nodes, communities, symbol table | After running `devnexus index` |
 | `nodes/` | Per-community directories with symbol files and call graphs | After running `devnexus index` |
 | `API_CONTRACTS.md` | Every endpoint shape — final authority | When any endpoint changes |
@@ -169,28 +171,46 @@ One engineer's discovery is every engineer's context — within minutes, not mee
 
 **Joining an existing workspace:**
 
+If your team already has a vault, you don't need to create a new one.
+
 ```bash
+mkdir my-project && cd my-project
 devnexus init
 # "Do you have an existing project vault?" → Yes
-# Provide the vault git URL or folder name
+# Provide the vault git URL (e.g. https://github.com/team/project-vault.git)
+# Or if the vault folder already exists locally, provide its name
 # Add your repos, pick your agents — done
 ```
 
-The vault is never modified during join. Your team's decisions and architecture stay intact.
+The vault is cloned (or linked) into your workspace. Nothing in it is modified — your team's decisions, architecture, and contracts stay intact.
+
+**Already have a vault but setting up a new workspace?**
+
+If you have a vault from a previous setup or a teammate shared one with you:
+
+```bash
+mkdir my-project && cd my-project
+git clone https://github.com/team/project-vault.git
+devnexus init
+# "Do you have an existing project vault?" → Yes
+# Enter the folder name: project-vault
+```
+
+devnexus detects the existing vault and wires everything up — .ai-rules/, pointer files, git hooks — without touching vault contents.
 
 ---
 
 ## Optional Integrations
 
-devnexus works on its own. These tools add deeper code intelligence if you want it — devnexus manages them for you.
+devnexus works on its own. GitNexus adds deeper code intelligence if you want it — devnexus manages it for you.
 
 | Tool | What it adds | How to use |
 |------|-------------|------------|
-| [Graphify](https://github.com/safishamsi/graphify) | Structural analysis — god nodes, communities, bridges → `GRAPH_REPORT.md` | `devnexus graphify` (fetches + runs automatically) |
 | [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Code intelligence — blast radius, execution flows, safe renames via MCP | Prompted during `devnexus init` — auto-installs if you say yes |
-| `devnexus index` | Writes the GitNexus graph into the vault as browsable Obsidian files | Built-in command, no extra install |
+| `devnexus analyze` | Runs GitNexus analyze on all repos (or a specific one) | Built-in command |
+| `devnexus index` | Builds vault code graph, structural analysis, GRAPH_REPORT.md | Built-in command, no extra install |
 
-None of these are required to get started. For details on each: [Integrations Guide](docs/INTEGRATIONS.md)
+None of these are required to get started. For details: [Integrations Guide](docs/INTEGRATIONS.md)
 
 ---
 
@@ -198,7 +218,7 @@ None of these are required to get started. For details on each: [Integrations Gu
 
 ```bash
 npm update -g devnexus
-cd my-workspace
+cd my-project
 devnexus update
 ```
 
@@ -206,10 +226,25 @@ Regenerates all `.ai-rules/` and reinstalls git hooks. Never touches pointer fil
 
 ---
 
+## Vault Git Setup
+
+The vault needs a git remote to sync across machines and teammates.
+
+1. Create a new repo on GitHub (private recommended)
+2. Add it as the vault remote:
+   ```bash
+   cd your-vault
+   git remote add origin https://github.com/you/your-vault.git
+   git push -u origin main
+   ```
+3. Open Obsidian — the Git plugin handles auto-commit and sync from here
+
+The vault root is the repo root — no need to change the base path in the Git plugin settings.
+
 ## Obsidian Setup
 
 1. Open Obsidian → File → Open Vault → select `your-vault/`
-2. Settings → Community Plugins → enable "Obsidian Git"
+2. Settings → Community Plugins → search for "Git" (by Vinzent)
 
 The plugin is pre-configured by `devnexus init` — auto-commit and auto-pull every minute, push after commit, pull on startup.
 

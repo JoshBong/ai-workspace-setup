@@ -110,24 +110,21 @@ describe('buildIndex', () => {
     assert.equal(startCount, 1, 'should have exactly one start marker');
   });
 
-  it('god nodes are sorted by cross-community then edges', () => {
+  it('god nodes are sorted by betweenness centrality then cross-community', () => {
     const indexPath = path.join(vaultDir, 'NODE_INDEX.md');
     const content = fs.readFileSync(indexPath, 'utf-8');
-    // Extract god node rows
     const godSection = content.split('## Communities')[0];
     const rows = godSection.split('\n').filter(l => l.startsWith('| [['));
     assert.ok(rows.length > 1, 'should have multiple god nodes');
 
-    // Parse community counts from rows
-    const commCounts = rows.map(r => {
+    const bcScores = rows.map(r => {
       const cells = r.split('|').map(c => c.trim()).filter(Boolean);
-      return parseInt(cells[3]); // Communities column
+      return parseFloat(cells[2]); // BC column
     });
 
-    // Verify descending order
-    for (let i = 1; i < commCounts.length; i++) {
-      assert.ok(commCounts[i] <= commCounts[i - 1],
-        `god nodes should be sorted descending by communities: ${commCounts[i]} > ${commCounts[i - 1]} at index ${i}`);
+    for (let i = 1; i < bcScores.length; i++) {
+      assert.ok(bcScores[i] <= bcScores[i - 1] + 0.001,
+        `god nodes should be sorted descending by BC: ${bcScores[i]} > ${bcScores[i - 1]} at index ${i}`);
     }
   });
 

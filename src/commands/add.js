@@ -10,13 +10,12 @@ import { gitClone } from '../lib/git.js';
 import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
 import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
-import { promptAndRunGraphify } from '../lib/graphify.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointerTemplates from '../templates/pointers.js';
 
 export function addCommand() {
   const cmd = new Command('add')
-    .description('Add repo(s) to an existing workspace')
+    .description('Add repo(s) to an existing workspace (HTTPS, SSH, or local folder)')
     .argument('<repos...>', 'Repo URLs or folder names to add')
     .option('--no-clone', 'Skip git clone, just configure existing directories')
     .action(async (repos, opts) => {
@@ -46,7 +45,8 @@ async function runAdd(repos, opts) {
 
   for (const repo of repos) {
     const isUrl = repo.startsWith('http') || repo.startsWith('git@');
-    const dirName = isUrl ? path.basename(repo, '.git') : repo;
+    const isAbsPath = path.isAbsolute(repo);
+    const dirName = isUrl ? path.basename(repo, '.git') : isAbsPath ? path.basename(repo) : repo;
 
     // Check if already tracked
     if (existingRepos.includes(dirName)) {
@@ -67,6 +67,19 @@ async function runAdd(repos, opts) {
           log.error(`Failed to clone ${repo}: ${err.message}`);
           continue;
         }
+      }
+    }
+
+    // For absolute paths, symlink into workspace if not already present
+    if (isAbsPath) {
+      if (!fs.existsSync(repo)) {
+        log.error(`Path '${repo}' not found — skipping`);
+        continue;
+      }
+      const targetPath = path.join(workspaceDir, dirName);
+      if (!fs.existsSync(targetPath)) {
+        fs.symlinkSync(repo, targetPath, 'dir');
+        log.success(`Symlinked ${dirName} → ${repo}`);
       }
     }
 
@@ -175,8 +188,4 @@ async function runAdd(repos, opts) {
     log.success(`Updated .workspace-config (${existingRepos.length} repos total)`);
   }
 
-  // Graphify — once after all repos are processed
-  if (added > 0) {
-    await promptAndRunGraphify(workspaceDir, vaultName, agents);
-  }
 }

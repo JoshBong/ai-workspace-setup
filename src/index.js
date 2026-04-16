@@ -11,8 +11,7 @@ import { addCommand } from './commands/add.js';
 import { removeCommand } from './commands/remove.js';
 import { agentCommand } from './commands/agent.js';
 import { doctorCommand } from './commands/doctor.js';
-import { graphifyCommand } from './commands/graphify.js';
-import { gitnexusCommand } from './commands/gitnexus.js';
+import { analyzeCommand } from './commands/analyze.js';
 import { indexCommand } from './commands/index.js';
 
 export function createProgram() {
@@ -30,8 +29,7 @@ export function createProgram() {
   program.addCommand(removeCommand());
   program.addCommand(agentCommand());
   program.addCommand(doctorCommand());
-  program.addCommand(graphifyCommand());
-  program.addCommand(gitnexusCommand());
+  program.addCommand(analyzeCommand());
   program.addCommand(indexCommand());
 
   return program;

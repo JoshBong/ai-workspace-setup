@@ -19,7 +19,6 @@ import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
 import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
-import { promptAndRunGraphify } from '../lib/graphify.js';
 
 export function initCommand() {
   const cmd = new Command('init')
@@ -162,10 +161,6 @@ async function runInit(opts) {
 
   // Step 9: Register vault in vault-map.json (for vault-encoder hook)
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
-
-  // Step 10: Graphify — workspace-level structural analysis
-  log.step('Step 10', 'Graphify — workspace structural analysis');
-  await promptAndRunGraphify(workspaceDir, vaultName, agents);
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
@@ -590,7 +585,7 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  |-- ${vaultName}/`);
   console.log('  |   |-- MOC.md               <- Entry point — read this first each session');
   console.log('  |   |-- ARCHITECTURE_OVERVIEW.md  <- How your system works');
-  console.log('  |   |-- GRAPH_REPORT.md      <- Structural analysis (populate with Graphify)');
+  console.log('  |   |-- GRAPH_REPORT.md      <- Structural analysis (populate with devnexus index)');
   console.log('  |   |-- API_CONTRACTS.md     <- Endpoint shapes');
   console.log('  |   |-- DECISIONS.md         <- What was tried and why');
   console.log('  |   |-- SESSION_LOG.md       <- Session handoff notes');
@@ -605,11 +600,7 @@ function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
   console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  const graphifyHint = agents.includes('claude') ? 'In Claude Code, type /graphify .'
-    : agents.includes('cursor') ? 'In Cursor, ask: "run graphify on this workspace"'
-    : agents.includes('codex') ? 'In Codex, ask: "run graphify on this workspace"'
-    : 'Ask your agent to run graphify to generate GRAPH_REPORT.md';
-  console.log(`  4. Generate GRAPH_REPORT.md: ${graphifyHint}`);
+  console.log('  4. Run devnexus index to generate GRAPH_REPORT.md + code graph');
   console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
   console.log("  6. To update rules after a new release: devnexus update\n");
 }

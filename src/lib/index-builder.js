@@ -24,7 +24,7 @@ import { ensureDir, writeFile } from './fs-helpers.js';
  * Build the full index for a workspace.
  * Queries GitNexus for each repo, computes tiers, writes vault files.
  */
-export function buildIndex(workspaceDir, vaultName, repos) {
+export function buildIndex(workspaceDir, vaultName, repos, prevSnapshot = null) {
   const vaultDir = path.join(workspaceDir, vaultName);
   const nodesDir = path.join(vaultDir, NODES_DIR);
 
@@ -41,9 +41,21 @@ export function buildIndex(workspaceDir, vaultName, repos) {
   // Merge cross-repo data
   const merged = mergeRepoData(repoData);
 
-  // Compute tiers
-  const godNodes = computeGodNodes(merged);
+  // Compute betweenness centrality on full call graph
+  const bcScores = computeBetweennessCentrality(merged);
+
+  // Compute tiers (now using BC scores)
+  const godNodes = computeGodNodes(merged, bcScores);
   const communities = computeCommunities(merged);
+
+  // Detect bridges between communities
+  const bridges = detectBridges(merged, communities);
+
+  // Detect knowledge gaps
+  const gaps = detectKnowledgeGaps(communities, merged);
+
+  // Compute graph diff from previous snapshot
+  const diff = prevSnapshot ? computeGraphDiff(prevSnapshot, { godNodes, communities, symbols: merged.symbols }) : null;
 
   // Wipe and regenerate nodes/
   if (fs.existsSync(nodesDir)) {
@@ -52,13 +64,26 @@ export function buildIndex(workspaceDir, vaultName, repos) {
 
   // Write vault files
   writeCommunityDirs(nodesDir, communities, merged);
-  writeNodeIndex(vaultDir, godNodes, communities, merged);
+  writeNodeIndex(vaultDir, godNodes, communities, merged, bcScores);
   injectArchitectureOverview(vaultDir, godNodes, communities, merged);
+  writeGraphReport(vaultDir, godNodes, communities, merged, bcScores, bridges, gaps, diff);
+
+  // Build snapshot for future diffs
+  const snapshot = {
+    timestamp: new Date().toISOString(),
+    godNodes: godNodes.map(g => ({ name: g.name, repo: g.repo, totalEdges: g.totalEdges, bc: bcScores.get(`${g.repo}::${g.name}`) || 0 })),
+    communities: communities.map(c => ({ name: c.name, repo: c.repo, symbolCount: c.symbolCount })),
+    symbolCount: merged.symbols.length,
+  };
 
   return {
     godNodes: godNodes.length,
     communities: communities.length,
     totalSymbols: merged.symbols.length,
+    bridges: bridges.length,
+    gaps: gaps.length,
+    hasDiff: !!diff,
+    snapshot,
   };
 }
 
@@ -144,10 +169,98 @@ function mergeRepoData(repoData) {
 }
 
 /**
- * Compute god nodes: top N symbols by cross-community reach + edge count.
- * A god node bridges communities — changing it ripples further than it looks.
+ * Brandes' algorithm for betweenness centrality.
+ * O(V·E) — fine for codebases under 10k symbols.
+ * Returns Map<symbolKey, bcScore> normalized to [0, 1].
  */
-function computeGodNodes(merged) {
+function computeBetweennessCentrality(merged) {
+  const { symbols, calls } = merged;
+
+  // Build adjacency list from call graph
+  const adj = new Map();
+  const allNodes = new Set();
+
+  for (const s of symbols) {
+    const key = `${s.repo}::${s.name}`;
+    allNodes.add(key);
+    if (!adj.has(key)) adj.set(key, []);
+  }
+
+  for (const c of calls) {
+    const callerKey = `${c.repo}::${c.caller}`;
+    const calleeKey = `${c.repo}::${c.callee}`;
+    allNodes.add(callerKey);
+    allNodes.add(calleeKey);
+    if (!adj.has(callerKey)) adj.set(callerKey, []);
+    if (!adj.has(calleeKey)) adj.set(calleeKey, []);
+    adj.get(callerKey).push(calleeKey);
+  }
+
+  const nodes = Array.from(allNodes);
+  const bc = new Map();
+  for (const n of nodes) bc.set(n, 0);
+
+  for (const s of nodes) {
+    const stack = [];
+    const pred = new Map();
+    const sigma = new Map();
+    const dist = new Map();
+    const delta = new Map();
+
+    for (const t of nodes) {
+      pred.set(t, []);
+      sigma.set(t, 0);
+      dist.set(t, -1);
+      delta.set(t, 0);
+    }
+
+    sigma.set(s, 1);
+    dist.set(s, 0);
+    const queue = [s];
+
+    while (queue.length > 0) {
+      const v = queue.shift();
+      stack.push(v);
+      const neighbors = adj.get(v) || [];
+      for (const w of neighbors) {
+        if (dist.get(w) < 0) {
+          queue.push(w);
+          dist.set(w, dist.get(v) + 1);
+        }
+        if (dist.get(w) === dist.get(v) + 1) {
+          sigma.set(w, sigma.get(w) + sigma.get(v));
+          pred.get(w).push(v);
+        }
+      }
+    }
+
+    while (stack.length > 0) {
+      const w = stack.pop();
+      for (const v of pred.get(w)) {
+        const d = (sigma.get(v) / sigma.get(w)) * (1 + delta.get(w));
+        delta.set(v, delta.get(v) + d);
+      }
+      if (w !== s) {
+        bc.set(w, bc.get(w) + delta.get(w));
+      }
+    }
+  }
+
+  // Normalize to [0, 1]
+  const n = nodes.length;
+  const norm = n > 2 ? (n - 1) * (n - 2) : 1;
+  for (const [k, v] of bc.entries()) {
+    bc.set(k, v / norm);
+  }
+
+  return bc;
+}
+
+/**
+ * Compute god nodes using betweenness centrality as primary signal.
+ * BC catches bottleneck nodes that edge count misses.
+ */
+function computeGodNodes(merged, bcScores) {
   const { symbols, crossMap, edgeMap, membershipMap } = merged;
 
   const candidates = symbols
@@ -155,18 +268,21 @@ function computeGodNodes(merged) {
       const key = `${s.repo}::${s.name}`;
       const cross = crossMap.get(key) || 0;
       const edges = edgeMap.get(key) || s.edges;
+      const bc = bcScores.get(key) || 0;
       const membership = membershipMap.get(key);
       return {
         ...s,
         crossCommunities: cross,
         totalEdges: edges,
+        bc,
         communityId: membership?.communityId,
         communityLabel: membership?.communityLabel,
       };
     })
-    .filter(s => s.totalEdges >= GOD_NODE_MIN_EDGES || s.crossCommunities >= GOD_NODE_MIN_COMMUNITIES)
+    .filter(s => s.totalEdges >= GOD_NODE_MIN_EDGES || s.crossCommunities >= GOD_NODE_MIN_COMMUNITIES || s.bc > 0.05)
     .sort((a, b) => {
-      // Primary: cross-community reach. Secondary: total edges. Tertiary: name (stable).
+      // Primary: betweenness centrality. Secondary: cross-community. Tertiary: edges.
+      if (Math.abs(b.bc - a.bc) > 0.001) return b.bc - a.bc;
       if (b.crossCommunities !== a.crossCommunities) return b.crossCommunities - a.crossCommunities;
       if (b.totalEdges !== a.totalEdges) return b.totalEdges - a.totalEdges;
       return a.name.localeCompare(b.name);
@@ -174,6 +290,125 @@ function computeGodNodes(merged) {
     .slice(0, GOD_NODE_MAX);
 
   return candidates;
+}
+
+/**
+ * Detect bridge edges — call relationships that are the sole link between two communities.
+ * If this edge breaks, those communities lose their connection.
+ */
+function detectBridges(merged, communities) {
+  const { calls, membershipMap } = merged;
+  const bridges = [];
+
+  // Build map: community pair -> edges connecting them
+  const pairEdges = new Map();
+
+  for (const c of calls) {
+    const callerKey = `${c.repo}::${c.caller}`;
+    const calleeKey = `${c.repo}::${c.callee}`;
+    const callerMem = membershipMap.get(callerKey);
+    const calleeMem = membershipMap.get(calleeKey);
+    if (!callerMem || !calleeMem) continue;
+    if (callerMem.communityId === calleeMem.communityId) continue;
+
+    const pairKey = [callerMem.communityId, calleeMem.communityId].sort().join('::');
+    if (!pairEdges.has(pairKey)) pairEdges.set(pairKey, []);
+    pairEdges.get(pairKey).push({
+      caller: c.caller,
+      callee: c.callee,
+      repo: c.repo,
+      callerCommunity: callerMem.communityId,
+      calleeCommunity: calleeMem.communityId,
+    });
+  }
+
+  // Bridges = community pairs connected by only 1 edge
+  for (const [, edges] of pairEdges) {
+    if (edges.length === 1) {
+      bridges.push(edges[0]);
+    }
+  }
+
+  return bridges;
+}
+
+/**
+ * Detect knowledge gaps — communities with structural warning signs.
+ */
+function detectKnowledgeGaps(communities, merged) {
+  const gaps = [];
+
+  for (const c of communities) {
+    if (c.id === 'uncategorized') continue;
+
+    // Thin community: too few symbols, might be dead code or undocumented entry points
+    if (c.symbolCount <= 2) {
+      gaps.push({ type: 'thin', community: c.name, repo: c.repo, detail: `${c.symbolCount} symbols — possible dead code or undocumented entry point` });
+    }
+
+    // Low cohesion: symbols are loosely connected internally
+    if (c.cohesion < 0.2 && c.symbolCount > 3) {
+      gaps.push({ type: 'low-cohesion', community: c.name, repo: c.repo, detail: `cohesion ${c.cohesion.toFixed(2)} — symbols may not belong together` });
+    }
+
+    // Oversized community: taking on too much responsibility
+    if (c.symbolCount > 50) {
+      gaps.push({ type: 'oversized', community: c.name, repo: c.repo, detail: `${c.symbolCount} symbols — likely needs splitting` });
+    }
+
+    // No hub nodes with significant edges
+    const maxHubEdges = Math.max(0, ...c.hubs.map(h => h.edges));
+    if (maxHubEdges < 3 && c.symbolCount > 5) {
+      gaps.push({ type: 'flat', community: c.name, repo: c.repo, detail: 'no clear hub — flat structure, hard to find entry points' });
+    }
+  }
+
+  return gaps;
+}
+
+/**
+ * Diff current index against a previous snapshot.
+ */
+function computeGraphDiff(prev, current) {
+  const diff = { newGodNodes: [], removedGodNodes: [], communityChanges: [], symbolDelta: 0 };
+
+  const prevGodSet = new Set(prev.godNodes.map(g => `${g.repo}::${g.name}`));
+  const currGodSet = new Set(current.godNodes.map(g => `${g.repo}::${g.name}`));
+
+  for (const g of current.godNodes) {
+    if (!prevGodSet.has(`${g.repo}::${g.name}`)) {
+      diff.newGodNodes.push(g);
+    }
+  }
+  for (const g of prev.godNodes) {
+    if (!currGodSet.has(`${g.repo}::${g.name}`)) {
+      diff.removedGodNodes.push(g);
+    }
+  }
+
+  const prevComm = new Map(prev.communities.map(c => [`${c.repo}::${c.name}`, c.symbolCount]));
+  for (const c of current.communities) {
+    const key = `${c.repo}::${c.name}`;
+    const prevCount = prevComm.get(key);
+    if (prevCount === undefined) {
+      diff.communityChanges.push({ name: c.name, repo: c.repo, change: 'new', count: c.symbolCount });
+    } else {
+      const delta = c.symbolCount - prevCount;
+      if (Math.abs(delta) >= 3) {
+        diff.communityChanges.push({ name: c.name, repo: c.repo, change: delta > 0 ? 'grew' : 'shrank', delta, count: c.symbolCount });
+      }
+    }
+  }
+  for (const c of prev.communities) {
+    const key = `${c.repo}::${c.name}`;
+    if (!current.communities.find(cc => `${cc.repo}::${cc.name}` === key)) {
+      diff.communityChanges.push({ name: c.name, repo: c.repo, change: 'removed' });
+    }
+  }
+
+  diff.symbolDelta = current.symbols.length - prev.symbolCount;
+
+  return diff;
 }
 
 /**
@@ -334,9 +569,9 @@ function writeCommunityDirs(nodesDir, communities, merged) {
 }
 
 /**
- * Write NODE_INDEX.md — flat table of all symbols with tier, community, edges.
+ * Write NODE_INDEX.md — flat table of all symbols with tier, community, edges, BC.
  */
-function writeNodeIndex(vaultDir, godNodes, communities, merged) {
+function writeNodeIndex(vaultDir, godNodes, communities, merged, bcScores) {
   const godSet = new Set(godNodes.map(g => `${g.repo}::${g.name}`));
   const hubSet = new Set();
   for (const c of communities) {
@@ -352,10 +587,10 @@ function writeNodeIndex(vaultDir, godNodes, communities, merged) {
   // God nodes section
   md += `## God Nodes\n\n`;
   md += `> High edge count + cross-community reach. Always read before editing.\n\n`;
-  md += `| Symbol | File | Edges | Communities | Repo |\n`;
-  md += `|--------|------|-------|-------------|------|\n`;
+  md += `| Symbol | File | BC | Edges | Communities | Repo |\n`;
+  md += `|--------|------|----|-------|-------------|------|\n`;
   for (const g of godNodes) {
-    md += `| [[${escapeWikilink(g.name)}]] | \`${g.filePath || ''}\` | ${g.totalEdges} | ${g.crossCommunities} | ${g.repo} |\n`;
+    md += `| [[${escapeWikilink(g.name)}]] | \`${g.filePath || ''}\` | ${g.bc.toFixed(3)} | ${g.totalEdges} | ${g.crossCommunities} | ${g.repo} |\n`;
   }
 
   // Communities section
@@ -369,8 +604,8 @@ function writeNodeIndex(vaultDir, godNodes, communities, merged) {
 
   // Full symbol table
   md += `\n## All Symbols\n\n`;
-  md += `| Symbol | Tier | Community | Edges | File | Repo |\n`;
-  md += `|--------|------|-----------|-------|------|------|\n`;
+  md += `| Symbol | Tier | Community | BC | Edges | File | Repo |\n`;
+  md += `|--------|------|-----------|-----|-------|------|------|\n`;
 
   const sortedSymbols = [...merged.symbols].sort((a, b) => b.edges - a.edges || a.name.localeCompare(b.name));
   for (const s of sortedSymbols) {
@@ -381,8 +616,9 @@ function writeNodeIndex(vaultDir, godNodes, communities, merged) {
 
     const membership = merged.membershipMap.get(key);
     const communityName = membership ? findCommunityName(communities, membership.repo, membership.communityId) : '';
+    const bc = bcScores.get(key) || 0;
 
-    md += `| [[${escapeWikilink(s.name)}]] | ${tier} | ${communityName} | ${s.edges} | \`${s.filePath || ''}\` | ${s.repo} |\n`;
+    md += `| [[${escapeWikilink(s.name)}]] | ${tier} | ${communityName} | ${bc.toFixed(3)} | ${s.edges} | \`${s.filePath || ''}\` | ${s.repo} |\n`;
   }
 
   writeFile(path.join(vaultDir, NODE_INDEX_FILE), md);
@@ -442,6 +678,85 @@ function injectArchitectureOverview(vaultDir, godNodes, communities, merged) {
   }
 
   fs.writeFileSync(archPath, content);
+}
+
+/**
+ * Write GRAPH_REPORT.md — structural analysis with BC, bridges, gaps, and diff.
+ */
+function writeGraphReport(vaultDir, godNodes, communities, merged, bcScores, bridges, gaps, diff) {
+  const date = new Date().toISOString().split('T')[0];
+  let md = `# Graph Report\n\n`;
+  md += `> Auto-generated by \`devnexus index\`. Do not edit manually.\n`;
+  md += `> ${date} · ${merged.symbols.length} symbols · ${communities.length} communities · ${godNodes.length} god nodes\n\n`;
+
+  // Graph diff
+  if (diff) {
+    md += `## Changes Since Last Index\n\n`;
+    if (diff.symbolDelta !== 0) {
+      md += `- Symbols: ${diff.symbolDelta > 0 ? '+' : ''}${diff.symbolDelta} (${merged.symbols.length} total)\n`;
+    }
+    if (diff.newGodNodes.length > 0) {
+      md += `- New god nodes: ${diff.newGodNodes.map(g => `**${g.name}**`).join(', ')}\n`;
+    }
+    if (diff.removedGodNodes.length > 0) {
+      md += `- Removed god nodes: ${diff.removedGodNodes.map(g => `~~${g.name}~~`).join(', ')}\n`;
+    }
+    for (const c of diff.communityChanges) {
+      if (c.change === 'new') md += `- New community: **${c.name}** (${c.count} symbols)\n`;
+      else if (c.change === 'removed') md += `- Removed community: ~~${c.name}~~\n`;
+      else md += `- **${c.name}** ${c.change} by ${Math.abs(c.delta)} → ${c.count} symbols\n`;
+    }
+    if (diff.newGodNodes.length === 0 && diff.removedGodNodes.length === 0 && diff.communityChanges.length === 0 && diff.symbolDelta === 0) {
+      md += `No structural changes detected.\n`;
+    }
+    md += `\n`;
+  }
+
+  // God nodes by betweenness centrality
+  md += `## God Nodes (by betweenness centrality)\n\n`;
+  md += `> High BC = bottleneck. Many shortest paths route through this node. Always audit before editing.\n\n`;
+  md += `| Rank | Symbol | BC | Edges | Cross-Community | File | Repo |\n`;
+  md += `|------|--------|----|-------|-----------------|------|------|\n`;
+  godNodes.forEach((g, i) => {
+    md += `| ${i + 1} | **${g.name}** | ${g.bc.toFixed(3)} | ${g.totalEdges} | ${g.crossCommunities} | \`${g.filePath || ''}\` | ${g.repo} |\n`;
+  });
+
+  // Bridges
+  md += `\n## Bridges\n\n`;
+  md += `> Sole call edge between two communities. If this breaks, those communities disconnect.\n\n`;
+  if (bridges.length > 0) {
+    md += `| Caller | Callee | Repo |\n`;
+    md += `|--------|--------|------|\n`;
+    for (const b of bridges) {
+      md += `| \`${b.caller}\` | \`${b.callee}\` | ${b.repo} |\n`;
+    }
+  } else {
+    md += `No single-edge bridges detected. All community pairs have redundant connections.\n`;
+  }
+
+  // Knowledge gaps
+  md += `\n## Knowledge Gaps\n\n`;
+  if (gaps.length > 0) {
+    md += `| Type | Community | Repo | Detail |\n`;
+    md += `|------|-----------|------|--------|\n`;
+    for (const g of gaps) {
+      md += `| ${g.type} | ${g.community} | ${g.repo} | ${g.detail} |\n`;
+    }
+  } else {
+    md += `No structural warnings detected.\n`;
+  }
+
+  // Communities overview
+  md += `\n## Communities\n\n`;
+  md += `| Community | Symbols | Cohesion | Hubs | Repo |\n`;
+  md += `|-----------|---------|----------|------|------|\n`;
+  for (const c of communities) {
+    const hubNames = c.hubs.map(h => h.name).join(', ');
+    md += `| ${c.name} | ${c.symbolCount} | ${c.cohesion.toFixed(2)} | ${hubNames} | ${c.repo} |\n`;
+  }
+
+  md += `\n`;
+  writeFile(path.join(vaultDir, 'GRAPH_REPORT.md'), md);
 }
 
 // --- File generation helpers ---

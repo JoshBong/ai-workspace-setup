@@ -100,9 +100,9 @@ describe('markdown table integrity', () => {
     // A cell containing an unescaped | would create an extra column
     for (const row of dataRows) {
       const cells = row.split('|').filter(Boolean);
-      // God nodes table: 5 cols, Communities: 5 cols, All Symbols: 6 cols
-      assert.ok(cells.length >= 5 && cells.length <= 6,
-        `Row has unexpected column count (${cells.length}): ${row.slice(0, 80)}`);
+      // God nodes table: 6 cols, Communities: 5 cols, All Symbols: 7 cols
+      assert.ok(cells.length >= 5 && cells.length <= 7,
+        `Row has unexpected column count (${cells.length}): ${row.slice(0, 100)}`);
     }
 
     fs.rmSync(dir, { recursive: true });
