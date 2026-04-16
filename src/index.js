@@ -13,6 +13,7 @@ import { agentCommand } from './commands/agent.js';
 import { doctorCommand } from './commands/doctor.js';
 import { analyzeCommand } from './commands/analyze.js';
 import { indexCommand } from './commands/index.js';
+import { completionCommand } from './commands/completion.js';
 
 export function createProgram() {
   const program = new Command();
@@ -31,6 +32,7 @@ export function createProgram() {
   program.addCommand(doctorCommand());
   program.addCommand(analyzeCommand());
   program.addCommand(indexCommand());
+  program.addCommand(completionCommand());
 
   return program;
 }

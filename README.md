@@ -82,6 +82,8 @@ devnexus doctor --fix             auto-repair common issues
 devnexus agent ls                 list agents configured per repo
 devnexus agent add <agent>        add an agent (claude, cursor, codex, windsurf)
 devnexus agent rm <agent>         remove an agent
+devnexus completion install       set up shell tab completion (bash/zsh/fish)
+devnexus completion uninstall     remove tab completion
 ```
 
 ---

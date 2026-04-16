@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import { handleCompletion } from '../src/commands/completion.js';
 import { createProgram } from '../src/index.js';
 
-const program = createProgram();
-program.parse();
+if (!handleCompletion()) {
+  const program = createProgram();
+  program.parse();
+}
