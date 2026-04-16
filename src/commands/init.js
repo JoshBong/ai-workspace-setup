@@ -9,7 +9,7 @@ import { writeConfig, readConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { validateAgents, getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo } from '../lib/git.js';
-import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
+import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer } from '../lib/fs-helpers.js';
 import { promptProjectInfo, promptRepos, promptAgents, promptExistingVault } from '../lib/prompts.js';
 import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES } from '../constants.js';
 import * as profileTemplates from '../templates/profile.js';
@@ -406,10 +406,14 @@ function createWorkspacePointers({ projectName, vaultName, repoDirs, agents, wor
     const filePath = path.join(workspaceDir, filename);
     const content = pointers.workspacePointer({ projectName, vaultName, repos: repoDirs });
 
+    const rulesDir = path.join(workspaceDir, '.ai-rules');
     if (writeFileIfNotExists(filePath, content)) {
       log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
+    } else if (migrateExistingPointer(filePath, rulesDir)) {
+      writeFile(filePath, content);
+      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
     } else {
-      log.warn(`${filename} already exists — keeping it`);
+      log.plain(`  ${filename} already configured`);
     }
   }
 }
@@ -460,8 +464,11 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
 
     if (writeFileIfNotExists(filePath, content)) {
       log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
+    } else if (migrateExistingPointer(filePath, path.join(absRepoDir, '.ai-rules'))) {
+      writeFile(filePath, content);
+      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
     } else {
-      log.warn(`${filename} already exists — keeping it`);
+      log.plain(`  ${filename} already configured`);
     }
   }
 

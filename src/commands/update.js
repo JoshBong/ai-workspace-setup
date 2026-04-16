@@ -4,7 +4,9 @@ import path from 'path';
 import { log } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
-import { ensureDir, writeFile } from '../lib/fs-helpers.js';
+import { ensureDir, writeFile, migrateExistingPointer } from '../lib/fs-helpers.js';
+import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
+import * as pointerTemplates from '../templates/pointers.js';
 import { TEMPLATE_VERSION } from '../constants.js';
 import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
@@ -77,7 +79,7 @@ async function runUpdate(opts) {
 
     log.info(`Updating ${repoDir}/.ai-rules/...`);
     const repoStack = detectStack(absDir);
-    updateRepoRules(absDir, { projectName, vaultName, repoStack });
+    updateRepoRules(absDir, { projectName, vaultName, repoStack, agents });
     log.success(`Updated ${repoDir}/.ai-rules/ -> v${TEMPLATE_VERSION}`);
   }
 
@@ -111,13 +113,14 @@ function getCurrentVersion() {
 
 function updateWorkspaceRules(vaultName) {
   const rulesDir = path.resolve('.ai-rules');
+  const existingRules = preserveExistingRules(rulesDir);
 
-  // Clean and recreate
   if (fs.existsSync(rulesDir)) {
     fs.rmSync(rulesDir, { recursive: true });
   }
   ensureDir(rulesDir);
 
+  if (existingRules) writeFile(path.join(rulesDir, '00-existing-rules.md'), existingRules);
   writeFile(path.join(rulesDir, '01-session-start.md'), workspaceRules.sessionStart({ vaultName }));
   writeFile(path.join(rulesDir, '02-vault-rules.md'), workspaceRules.vaultRules({ vaultName }));
   writeFile(path.join(rulesDir, '03-contract-drift.md'), workspaceRules.contractDrift({ vaultName }));
@@ -125,14 +128,29 @@ function updateWorkspaceRules(vaultName) {
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
 }
 
-function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack }) {
+function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents }) {
   const rulesDir = path.join(absRepoDir, '.ai-rules');
+  const existingRules = preserveExistingRules(rulesDir);
 
   if (fs.existsSync(rulesDir)) {
     fs.rmSync(rulesDir, { recursive: true });
   }
   ensureDir(rulesDir);
 
+  // Migrate pointer files that don't reference .ai-rules/
+  for (const agent of agents) {
+    const filename = getPointerFilename(agent);
+    const filePath = path.join(absRepoDir, filename);
+    if (migrateExistingPointer(filePath, rulesDir)) {
+      const content = pointerTemplates.repoPointer({ repoDir: path.basename(absRepoDir), repoStack });
+      writeFile(filePath, content);
+      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+    }
+  }
+
+  if (existingRules && !fs.existsSync(path.join(rulesDir, '00-existing-rules.md'))) {
+    writeFile(path.join(rulesDir, '00-existing-rules.md'), existingRules);
+  }
   writeFile(path.join(rulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
   writeFile(path.join(rulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
   writeFile(path.join(rulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));
@@ -149,4 +167,12 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack }) {
   if (gnHookResult.installed) {
     log.success(`${path.basename(absRepoDir)}: GitNexus hook ${gnHookResult.updated ? 'updated' : 'installed'}`);
   }
+}
+
+function preserveExistingRules(rulesDir) {
+  const existingPath = path.join(rulesDir, '00-existing-rules.md');
+  if (fs.existsSync(existingPath)) {
+    return fs.readFileSync(existingPath, 'utf-8');
+  }
+  return null;
 }

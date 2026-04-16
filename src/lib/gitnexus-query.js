@@ -60,6 +60,7 @@ function cypher(repoName, query) {
     const raw = execSync(`npx gitnexus cypher -r ${repoName} "${query}"`, {
       encoding: 'utf-8',
       timeout: 30000,
+      maxBuffer: 50 * 1024 * 1024,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     return parseCypherOutput(raw.trim());
@@ -127,7 +128,7 @@ function querySymbolMembership(repoName) {
  */
 function querySymbolEdges(repoName) {
   return cypher(repoName,
-    'MATCH (s:Function)-[r]-(other) RETURN s.name, s.filePath, COUNT(r) AS edges ORDER BY edges DESC'
+    "MATCH (s)-[r]-(other) WHERE labels(s) IN ['Function','Method','Class','Constructor','Interface','Enum','Record'] RETURN s.name, s.filePath, COUNT(r) AS edges ORDER BY edges DESC"
   ).map(r => ({
     name: r['s.name'],
     filePath: r['s.filePath'],
@@ -141,7 +142,7 @@ function querySymbolEdges(repoName) {
  */
 function queryCrossCommunityEdges(repoName) {
   return cypher(repoName,
-    'MATCH (s:Function)-[r]->(other) WHERE r.type = \'CALLS\' MATCH (s)-[m]->(c:Community) MATCH (other)-[m2]->(c2:Community) WHERE c.id <> c2.id RETURN s.name, COUNT(DISTINCT c2.id) AS cross_communities ORDER BY cross_communities DESC'
+    "MATCH (s)-[r]->(other) WHERE labels(s) IN ['Function','Method','Class','Constructor','Interface','Enum','Record'] AND r.type = 'CALLS' MATCH (s)-[m]->(c:Community) MATCH (other)-[m2]->(c2:Community) WHERE c.id <> c2.id RETURN s.name, COUNT(DISTINCT c2.id) AS cross_communities ORDER BY cross_communities DESC"
   ).map(r => ({
     name: r['s.name'],
     crossCommunities: r['cross_communities'],

@@ -45,3 +45,13 @@ export function writeFileIfNotExists(filePath, content) {
   }
   return false;
 }
+
+export function migrateExistingPointer(filePath, rulesDir) {
+  if (!fs.existsSync(filePath)) return false;
+  const content = fs.readFileSync(filePath, 'utf-8').trim();
+  if (!content || content.includes('.ai-rules/')) return false;
+  const dest = path.join(rulesDir, '00-existing-rules.md');
+  ensureDir(rulesDir);
+  fs.writeFileSync(dest, content + '\n');
+  return true;
+}

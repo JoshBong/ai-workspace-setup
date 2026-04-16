@@ -128,13 +128,21 @@ function mergeRepoData(repoData) {
     for (const e of edges) {
       const key = `${repo}::${e.name}`;
       edgeMap.set(key, (edgeMap.get(key) || 0) + e.edges);
-      // Also build symbol list
       allSymbols.push({
         name: e.name,
         filePath: e.filePath,
         repo,
         edges: e.edges,
       });
+    }
+
+    // Include membership symbols not captured by the edges query (zero-edge interfaces, enums, etc.)
+    const edgeNames = new Set(edges.map(e => `${repo}::${e.name}`));
+    for (const m of membership) {
+      const key = `${repo}::${m.name}`;
+      if (!edgeNames.has(key)) {
+        allSymbols.push({ name: m.name, filePath: m.filePath, repo, edges: 0 });
+      }
     }
 
     // Cross-community edges
@@ -463,8 +471,8 @@ function computeCommunities(merged) {
     });
   }
 
-  // Sort by symbol count descending
-  result.sort((a, b) => b.symbolCount - a.symbolCount);
+  // Sort by symbol count descending, then name for stability
+  result.sort((a, b) => b.symbolCount - a.symbolCount || a.name.localeCompare(b.name));
 
   // Collect orphan symbols — have edges but no community membership
   const assignedSymbols = new Set();

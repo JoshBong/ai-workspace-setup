@@ -7,7 +7,7 @@ import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { gitClone } from '../lib/git.js';
-import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
+import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
 import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
 import * as repoRules from '../templates/repo-rules.js';
@@ -129,6 +129,9 @@ async function runAdd(repos, opts) {
 
       if (writeFileIfNotExists(filePath, content)) {
         log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
+      } else if (migrateExistingPointer(filePath, path.join(absDir, '.ai-rules'))) {
+        writeFile(filePath, content);
+        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
       }
     }
 
