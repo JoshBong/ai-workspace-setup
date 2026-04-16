@@ -54,7 +54,7 @@ my-project/
 ```bash
 npm install -g devnexus
 
-mkdir acme-app && cd acme-app
+mkdir example-app && cd example-app
 devnexus init
 ```
 
