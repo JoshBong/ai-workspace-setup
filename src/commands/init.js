@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import inquirer from 'inquirer';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -9,7 +10,7 @@ import { detectStack } from '../lib/detect-stack.js';
 import { validateAgents, getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo } from '../lib/git.js';
 import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists } from '../lib/fs-helpers.js';
-import { promptProjectInfo, promptRepos, promptAgents } from '../lib/prompts.js';
+import { promptProjectInfo, promptRepos, promptAgents, promptExistingVault } from '../lib/prompts.js';
 import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES } from '../constants.js';
 import * as profileTemplates from '../templates/profile.js';
 import * as vaultTemplates from '../templates/vault.js';
@@ -53,10 +54,20 @@ async function runInit(opts) {
     process.exit(1);
   }
 
-  // Gather config — from flags or interactive prompts
-  let projectName, description, techStack, author, repoInputs, agents;
-
   const isInteractive = !opts.name;
+  const workspaceDir = process.cwd();
+
+  // Check for existing vault (join flow)
+  if (isInteractive) {
+    const vaultSource = await promptExistingVault();
+    if (vaultSource) {
+      await runJoin(vaultSource, workspaceDir, opts);
+      return;
+    }
+  }
+
+  // Fresh workspace flow
+  let projectName, description, techStack, author, repoInputs, agents;
 
   if (isInteractive) {
     const info = await promptProjectInfo();
@@ -81,7 +92,6 @@ async function runInit(opts) {
   }
 
   const vaultName = `${projectName}-vault`;
-  const workspaceDir = process.cwd();
   const date = new Date().toISOString().split('T')[0];
 
   if (opts.dryRun) {
@@ -159,6 +169,136 @@ async function runInit(opts) {
 
   // Done!
   printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
+}
+
+async function runJoin(vaultSource, workspaceDir, opts) {
+  log.header('Joining Existing Workspace');
+
+  // Step 1: Resolve the vault
+  log.step('Step 1', 'Locating vault');
+  const isUrl = vaultSource.startsWith('http') || vaultSource.startsWith('git@');
+  let vaultName;
+
+  if (isUrl) {
+    vaultName = path.basename(vaultSource, '.git');
+    const targetPath = path.join(workspaceDir, vaultName);
+
+    if (fs.existsSync(targetPath)) {
+      log.success(`Found existing vault folder: ${vaultName}`);
+    } else {
+      log.plain(`Cloning vault from ${vaultSource}...`);
+      try {
+        gitClone(vaultSource, workspaceDir);
+        log.success(`Cloned ${vaultName}`);
+      } catch (err) {
+        log.error(`Failed to clone vault: ${err.message}`);
+        process.exit(1);
+      }
+    }
+  } else {
+    vaultName = vaultSource;
+    if (!fs.existsSync(path.join(workspaceDir, vaultName))) {
+      log.error(`Vault folder '${vaultName}' not found in ${workspaceDir}`);
+      process.exit(1);
+    }
+    log.success(`Found vault: ${vaultName}`);
+  }
+
+  // Verify it's actually a vault (has MOC.md)
+  const vaultDir = path.join(workspaceDir, vaultName);
+  if (!fs.existsSync(path.join(vaultDir, 'MOC.md'))) {
+    log.error(`${vaultName} doesn't look like a devnexus vault (no MOC.md found)`);
+    process.exit(1);
+  }
+
+  // Derive project name from vault name (strip -vault suffix)
+  const projectName = vaultName.endsWith('-vault')
+    ? vaultName.slice(0, -6)
+    : vaultName;
+
+  log.success(`Project: ${projectName}`);
+
+  // Step 2: Global AI profile
+  log.step('Step 2', 'Global AI profile');
+  setupProfile();
+
+  const profileLink = path.join(workspaceDir, 'ai-profile');
+  if (createSymlink(AI_PROFILE_DIR, profileLink)) {
+    log.success(`Linked ./ai-profile → ~/.ai-profile/`);
+  } else {
+    log.success('AI profile symlink already exists');
+  }
+
+  // Step 3: Your name + repos + agents
+  const { author } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'author',
+      message: "What's your name? (for decision log attribution)",
+      default: 'Engineer',
+    },
+  ]);
+
+  log.step('Step 3', 'Setting up repos');
+  const repoInputs = await promptRepos();
+  const repoDirs = [];
+  for (const repo of repoInputs) {
+    const dir = await setupRepo(repo, workspaceDir, opts.clone);
+    if (dir) repoDirs.push(dir);
+  }
+
+  if (repoDirs.length === 0 && repoInputs.length > 0) {
+    log.warn('No repos were set up successfully.');
+  }
+
+  const agents = await promptAgents();
+
+  // Step 5: Create workspace .ai-rules/
+  log.step('Step 5', 'Creating workspace agent rules');
+  createWorkspaceRules(vaultName, workspaceDir);
+
+  // Step 6: Create workspace pointer files
+  log.step('Step 6', 'Creating workspace pointer files');
+  createWorkspacePointers({ projectName, vaultName, repoDirs, agents, workspaceDir });
+
+  // Step 7: Set up each repo
+  log.step('Step 7', 'Setting up agent files in repos');
+  for (const repoDir of repoDirs) {
+    setupRepoFiles({
+      repoDir, projectName, vaultName, agents, workspaceDir,
+    });
+  }
+
+  // Step 8: Save config
+  log.step('Step 8', 'Saving workspace config');
+  writeConfig({
+    projectName,
+    vaultName,
+    repos: repoDirs,
+    agents,
+    techStack: 'Joined existing workspace',
+    description: `Joined ${projectName} workspace`,
+    author,
+    templateVersion: TEMPLATE_VERSION,
+  });
+  log.success('Saved .workspace-config');
+
+  // Step 9: GitNexus (optional — per repo code graph)
+  checkGitNexus(repoDirs, workspaceDir);
+
+  // Step 10: Register vault in vault-map.json
+  registerVaultMap(vaultName, vaultDir);
+
+  // Done
+  log.header('Join Complete!');
+  console.log(`\nYou've joined the ${projectName} workspace.\n`);
+  console.log(`  Vault:   ${vaultName}/ (existing — not modified)`);
+  console.log(`  Repos:   ${repoDirs.length > 0 ? repoDirs.join(', ') : '(none)'}`);
+  console.log(`  Agents:  ${agents.join(', ')}`);
+  console.log('\nNext steps:\n');
+  console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
+  console.log('  2. Read the vault — your team\'s decisions and architecture are already there');
+  console.log('  3. Start coding — your agents will read .ai-rules/ + the vault automatically\n');
 }
 
 function setupProfile() {

@@ -71,6 +71,29 @@ export async function promptAgents() {
   return agents.length > 0 ? agents : ['claude'];
 }
 
+export async function promptExistingVault() {
+  const { hasVault } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'hasVault',
+      message: 'Do you have an existing project vault? (joining a team)',
+      default: false,
+    },
+  ]);
+
+  if (!hasVault) return null;
+
+  const { vaultSource } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'vaultSource',
+      message: 'Vault location (git URL to clone, or folder name if already here):',
+    },
+  ]);
+
+  return vaultSource.trim() || null;
+}
+
 export async function confirm(message, defaultValue = true) {
   const { ok } = await inquirer.prompt([
     {
