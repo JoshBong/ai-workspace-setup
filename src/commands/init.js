@@ -158,7 +158,7 @@ async function runInit(opts) {
   log.success('Saved .workspace-config');
 
   // Step 8: GitNexus (optional — per repo code graph)
-  checkGitNexus(repoDirs, workspaceDir);
+  await checkGitNexus(repoDirs, workspaceDir);
 
   // Step 9: Register vault in vault-map.json (for vault-encoder hook)
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
@@ -284,7 +284,7 @@ async function runJoin(vaultSource, workspaceDir, opts) {
   log.success('Saved .workspace-config');
 
   // Step 9: GitNexus (optional — per repo code graph)
-  checkGitNexus(repoDirs, workspaceDir);
+  await checkGitNexus(repoDirs, workspaceDir);
 
   // Step 10: Register vault in vault-map.json
   registerVaultMap(vaultName, vaultDir);
@@ -473,13 +473,40 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
   }
 }
 
-function checkGitNexus(repoDirs, workspaceDir) {
+async function checkGitNexus(repoDirs, workspaceDir) {
   console.log('');
   let hasGitNexus = false;
   try {
     execSync('npx gitnexus --version', { stdio: 'pipe', timeout: 10000 });
     hasGitNexus = true;
   } catch { /* not available */ }
+
+  if (!hasGitNexus) {
+    log.step('Step 8', 'GitNexus — code intelligence');
+    log.plain('  GitNexus gives agents blast-radius analysis, execution flow tracing, and safe renames.');
+    const { install } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'install',
+        message: 'GitNexus not found. Install it now?',
+        default: true,
+      },
+    ]);
+
+    if (install) {
+      log.plain('  Installing GitNexus...');
+      try {
+        execSync('npm install -g gitnexus', { stdio: 'pipe', timeout: 120000 });
+        log.success('GitNexus installed');
+        hasGitNexus = true;
+      } catch (err) {
+        log.warn(`GitNexus install failed: ${err.message}`);
+        log.warn('Install manually: npm install -g gitnexus');
+      }
+    } else {
+      log.warn('Skipped — you can install later: npm install -g gitnexus');
+    }
+  }
 
   if (hasGitNexus) {
     log.step('Step 8', 'Indexing repos with GitNexus');
@@ -493,10 +520,6 @@ function checkGitNexus(repoDirs, workspaceDir) {
         } catch { log.warn(`GitNexus indexing failed for ${repoDir} — run manually: npx gitnexus analyze`); }
       }
     }
-  } else {
-    log.step('Step 8', 'GitNexus (skipped — not installed)');
-    log.warn('GitNexus gives agents blast-radius analysis and safe renames.');
-    log.warn('Install: npm install -g gitnexus  then run: npx gitnexus analyze');
   }
 }
 
