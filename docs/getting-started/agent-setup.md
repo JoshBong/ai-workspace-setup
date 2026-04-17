@@ -10,6 +10,7 @@ devnexus supports multiple AI agents simultaneously. Each agent gets rules tailo
 | **Cursor** | `.cursorrules` | Inline | Full — rules concatenated into file |
 | **Codex** | `AGENTS.md` | Pointer | Full — reads `.ai-rules/` directory natively |
 | **Windsurf** | `.windsurfrules` | Inline | Full — rules concatenated into file |
+| **Generic** | `AI_RULES.md` | Inline | Any tool — rules concatenated into a universal file |
 
 ### Pointer vs Inline
 

@@ -12,6 +12,7 @@ export const AGENTS = {
   cursor:   { pointer: '.cursorrules',     display: 'Cursor',       inline: true  },
   codex:    { pointer: 'AGENTS.md',        display: 'Codex',        inline: false },
   windsurf: { pointer: '.windsurfrules',   display: 'Windsurf',     inline: true  },
+  generic:  { pointer: 'AI_RULES.md',       display: 'Generic',      inline: true  },
 };
 
 export const MANAGED_FENCE_START = '<!-- devnexus:managed:start -->';
@@ -19,7 +20,7 @@ export const MANAGED_FENCE_END = '<!-- devnexus:managed:end -->';
 
 export const SUPPORTED_AGENTS = Object.keys(AGENTS);
 
-export const GITIGNORE_ENTRIES = ['.ai-rules/', '.cursor/', '.gitnexus'];
+export const GITIGNORE_ENTRIES = ['.ai-rules/', '.cursor/', '.gitnexus', 'AI_RULES.md'];
 
 // Index constants
 export const NODES_DIR = 'nodes';

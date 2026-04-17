@@ -96,6 +96,7 @@ ai-profile/
 # agent pointer files
 CLAUDE.md
 AGENTS.md
+AI_RULES.md
 .cursorrules
 .windsurfrules
 
