@@ -8,7 +8,8 @@ import { detectStack } from '../lib/detect-stack.js';
 import { ensureDir, writeFile, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
 import { getPointerFilename, getAgentDisplay, isInlineAgent } from '../lib/agents.js';
 import * as pointerTemplates from '../templates/pointers.js';
-import { TEMPLATE_VERSION } from '../constants.js';
+import { TEMPLATE_VERSION, DECISIONS_DIR } from '../constants.js';
+import * as vaultTemplates from '../templates/vault.js';
 import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
@@ -72,6 +73,11 @@ async function runUpdate(opts) {
     syncInlinePointers(path.resolve('.'), agents);
     s.succeed('Updating workspace rules...');
     updated.push('.ai-rules/ (workspace)');
+
+    const migrated = migrateDecisions(vaultName);
+    if (migrated > 0) {
+      log.success(`Migrated ${migrated} decision${migrated === 1 ? '' : 's'} to decisions/`);
+    }
   }
 
   for (const repoDir of targetRepos) {
@@ -191,4 +197,99 @@ function preserveExistingRules(rulesDir) {
     return fs.readFileSync(existingPath, 'utf-8');
   }
   return null;
+}
+
+function migrateDecisions(vaultName) {
+  const vaultDir = path.resolve(vaultName);
+  const decisionsDir = path.join(vaultDir, DECISIONS_DIR);
+  const decisionsFile = path.join(vaultDir, 'DECISIONS.md');
+
+  if (!fs.existsSync(decisionsFile)) return 0;
+  if (fs.existsSync(decisionsDir)) return 0;
+
+  const content = fs.readFileSync(decisionsFile, 'utf-8');
+  const entryPattern = /^## (\d{4}-\d{2}-\d{2}) — (.+?)(?:\s+\(by (.+?)\))?$/gm;
+  const entries = [];
+  let match;
+
+  while ((match = entryPattern.exec(content)) !== null) {
+    const [, date, title, author] = match;
+    const startIdx = match.index + match[0].length;
+    entries.push({ date, title, author: author || 'unknown', startIdx });
+  }
+
+  // Extract body for each entry
+  for (let i = 0; i < entries.length; i++) {
+    const end = i + 1 < entries.length ? entries[i + 1].startIdx - entries[i + 1].date.length - entries[i + 1].title.length - 20 : content.length;
+    const nextMatch = i + 1 < entries.length
+      ? content.lastIndexOf(`## ${entries[i + 1].date}`, end + 50)
+      : content.length;
+    entries[i].body = content.slice(entries[i].startIdx, nextMatch).trim();
+  }
+
+  // Heuristic: does the body reference code symbols? (PascalCase or camelCase identifiers)
+  const codeRefPattern = /\b[A-Z][a-zA-Z0-9]+(?:\.[a-zA-Z]+)?\b/;
+  const symbolEntries = entries.filter(e => codeRefPattern.test(e.body) || codeRefPattern.test(e.title));
+
+  if (symbolEntries.length === 0) {
+    // Still create decisions/ dir with README for future use
+    ensureDir(decisionsDir);
+    writeFile(path.join(decisionsDir, 'README.md'), vaultTemplates.decisionsReadme());
+    return 0;
+  }
+
+  ensureDir(decisionsDir);
+  writeFile(path.join(decisionsDir, 'README.md'), vaultTemplates.decisionsReadme());
+
+  let migrated = 0;
+  for (const entry of symbolEntries) {
+    const slug = entry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const filename = `${entry.date}-${slug}.md`;
+
+    // Best-effort ref extraction: find PascalCase words that look like symbols
+    const refs = [];
+    const refMatches = (entry.body + ' ' + entry.title).matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g);
+    for (const m of refMatches) {
+      if (!refs.includes(m[1])) refs.push(m[1]);
+    }
+
+    const refsLine = refs.length > 0 ? refs.map(r => `[[${r}]]`).join(', ') : '';
+    let md = `# ${entry.title}\n\n`;
+    md += `Date: ${entry.date}\n`;
+    md += `Author: ${entry.author}\n`;
+    md += `Status: ACTIVE\n`;
+    md += `Refs: ${refsLine}\n`;
+    md += `Depends:\n`;
+    md += `\n---\n\n`;
+    md += entry.body + '\n';
+
+    writeFile(path.join(decisionsDir, filename), md);
+    migrated++;
+  }
+
+  // Rewrite DECISIONS.md keeping only non-symbol entries
+  const nonSymbolEntries = entries.filter(e => !symbolEntries.includes(e));
+  const header = content.slice(0, content.indexOf('---') + 3);
+  let newContent = header.replace(
+    /^> Reverse-chronological log of non-obvious decisions.*$/m,
+    '> Append-only log for **project-level** decisions that don\'t reference specific code symbols.'
+  ).replace(
+    /^> When you reject an approach.*$/m,
+    '> Examples: license choices, tooling picks, infra decisions, team process choices.'
+  ).replace(
+    /^> Format:.*$/m,
+    '> For decisions about specific functions/classes/symbols, use `decisions/` instead.'
+  ).replace(
+    /^> Agents read this.*$/m,
+    '> Format: ## YYYY-MM-DD — Title (by [name]) followed by two sentences.'
+  );
+
+  for (const entry of nonSymbolEntries) {
+    newContent += `\n\n## ${entry.date} — ${entry.title}${entry.author !== 'unknown' ? ` (by ${entry.author})` : ''}\n\n${entry.body}`;
+  }
+  newContent += '\n';
+
+  fs.writeFileSync(decisionsFile, newContent);
+
+  return migrated;
 }

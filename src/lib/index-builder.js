@@ -17,6 +17,8 @@ import {
   INDEX_MARKER_END,
   NODES_DIR,
   NODE_INDEX_FILE,
+  DECISIONS_DIR,
+  DECISION_INDEX_FILE,
 } from '../constants.js';
 import { ensureDir, writeFile } from './fs-helpers.js';
 
@@ -62,11 +64,16 @@ export function buildIndex(workspaceDir, vaultName, repos, prevSnapshot = null) 
     fs.rmSync(nodesDir, { recursive: true });
   }
 
+  // Parse decisions and build ref map
+  const decisions = parseDecisions(vaultDir);
+  const decisionRefMap = matchDecisionRefs(decisions, merged);
+
   // Write vault files
-  writeCommunityDirs(nodesDir, communities, merged);
+  writeCommunityDirs(nodesDir, communities, merged, decisionRefMap);
   writeNodeIndex(vaultDir, godNodes, communities, merged, bcScores);
   injectArchitectureOverview(vaultDir, godNodes, communities, merged);
   writeGraphReport(vaultDir, godNodes, communities, merged, bcScores, bridges, gaps, diff);
+  writeDecisionIndex(vaultDir, decisions);
 
   // Build snapshot for future diffs
   const snapshot = {
@@ -82,6 +89,8 @@ export function buildIndex(workspaceDir, vaultName, repos, prevSnapshot = null) 
     totalSymbols: merged.symbols.length,
     bridges: bridges.length,
     gaps: gaps.length,
+    decisions: decisions.length,
+    staleDecisions: decisions.filter(d => d.status === 'STALE').length,
     hasDiff: !!diff,
     snapshot,
   };
@@ -550,7 +559,7 @@ function deriveCommunityName(members) {
  * Write community directories and node files.
  * nodes/{community-name}/_COMMUNITY.md + individual symbol files.
  */
-function writeCommunityDirs(nodesDir, communities, merged) {
+function writeCommunityDirs(nodesDir, communities, merged, decisionRefMap) {
   for (const community of communities) {
     const dirName = sanitizeDirName(community.name);
     const communityDir = path.join(nodesDir, dirName);
@@ -563,7 +572,8 @@ function writeCommunityDirs(nodesDir, communities, merged) {
     // Write individual node files — detect filename collisions
     const usedFilenames = new Set(['_COMMUNITY']);
     for (const symbol of community.members) {
-      const symbolMd = generateSymbolFile(symbol, community, merged);
+      const symbolDecisions = decisionRefMap.get(symbol.name) || [];
+      const symbolMd = generateSymbolFile(symbol, community, merged, symbolDecisions);
       let base = sanitizeFilename(symbol.name);
       if (usedFilenames.has(base)) {
         let counter = 2;
@@ -800,7 +810,7 @@ function generateCommunityFile(community, merged) {
   return md;
 }
 
-function generateSymbolFile(symbol, community, merged) {
+function generateSymbolFile(symbol, community, merged, decisions = []) {
   let md = `# ${symbol.name}\n\n`;
   md += `> \`${symbol.filePath || ''}\` · ${symbol.edges} edges · community: [[${sanitizeDirName(community.name)}/_COMMUNITY|${community.name}]]\n\n`;
 
@@ -824,7 +834,112 @@ function generateSymbolFile(symbol, community, merged) {
     md += `\n`;
   }
 
+  // Decisions
+  if (decisions.length > 0) {
+    md += `## Decisions\n\n`;
+    for (const d of decisions) {
+      md += `- [[decisions/${d.filename}|${d.title}]] — ${d.status}\n`;
+    }
+    md += `\n`;
+  }
+
   return md;
+}
+
+// --- Decision functions ---
+
+function parseDecisions(vaultDir) {
+  const decisionsDir = path.join(vaultDir, DECISIONS_DIR);
+  if (!fs.existsSync(decisionsDir)) return [];
+
+  const files = fs.readdirSync(decisionsDir)
+    .filter(f => f.endsWith('.md') && f !== DECISION_INDEX_FILE && f !== 'README.md');
+
+  const decisions = [];
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(decisionsDir, file), 'utf-8');
+    const lines = content.split('\n');
+
+    const decision = { filename: file.replace('.md', ''), title: '', date: '', author: '', status: 'ACTIVE', refs: [], depends: '' };
+
+    // Title from first heading
+    const titleLine = lines.find(l => l.startsWith('# '));
+    if (titleLine) decision.title = titleLine.slice(2).trim();
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('Date:')) decision.date = trimmed.slice(5).trim();
+      else if (trimmed.startsWith('Author:')) decision.author = trimmed.slice(7).trim();
+      else if (trimmed.startsWith('Status:')) decision.status = trimmed.slice(7).trim();
+      else if (trimmed.startsWith('Depends:')) decision.depends = trimmed.slice(8).trim();
+      else if (trimmed.startsWith('Refs:')) {
+        const refMatches = trimmed.matchAll(/\[\[([^\]]+)\]\]/g);
+        for (const match of refMatches) {
+          decision.refs.push(match[1]);
+        }
+      }
+    }
+
+    decisions.push(decision);
+  }
+
+  return decisions.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function matchDecisionRefs(decisions, merged) {
+  const symbolNames = new Set(merged.symbols.map(s => s.name));
+  const refMap = new Map(); // symbolName → [decision, ...]
+
+  for (const decision of decisions) {
+    let anyRefFound = false;
+    for (const ref of decision.refs) {
+      if (symbolNames.has(ref)) {
+        anyRefFound = true;
+        if (!refMap.has(ref)) refMap.set(ref, []);
+        refMap.get(ref).push(decision);
+      }
+    }
+    // Mark stale if ALL refs are missing from graph
+    if (decision.refs.length > 0 && !anyRefFound && decision.status === 'ACTIVE') {
+      decision.status = 'STALE';
+    }
+  }
+
+  return refMap;
+}
+
+function writeDecisionIndex(vaultDir, decisions) {
+  const decisionsDir = path.join(vaultDir, DECISIONS_DIR);
+  if (!fs.existsSync(decisionsDir)) return;
+  if (decisions.length === 0) return;
+
+  // Write back any stale status changes
+  for (const d of decisions) {
+    if (d.status === 'STALE') {
+      const filePath = path.join(decisionsDir, d.filename + '.md');
+      if (fs.existsSync(filePath)) {
+        let content = fs.readFileSync(filePath, 'utf-8');
+        content = content.replace(/^Status:\s*ACTIVE$/m, 'Status: STALE');
+        fs.writeFileSync(filePath, content);
+      }
+    }
+  }
+
+  let md = `# Decision Index\n\n`;
+  md += `> Auto-generated by \`devnexus index\`. Do not edit.\n`;
+  md += `> ${decisions.length} decision${decisions.length === 1 ? '' : 's'}\n\n`;
+  md += `| Date | Decision | Status | Symbols |\n`;
+  md += `|------|----------|--------|---------|\n`;
+
+  for (const d of decisions) {
+    const refs = d.refs.length > 0
+      ? d.refs.map(r => `[[${escapeWikilink(r)}]]`).join(', ')
+      : '—';
+    md += `| ${d.date} | [[decisions/${d.filename}|${d.title}]] | ${d.status} | ${refs} |\n`;
+  }
+
+  md += `\n`;
+  writeFile(path.join(decisionsDir, DECISION_INDEX_FILE), md);
 }
 
 // --- Utilities ---

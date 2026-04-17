@@ -1,7 +1,7 @@
 import os from 'os';
 import path from 'path';
 
-export const TEMPLATE_VERSION = '2.16';
+export const TEMPLATE_VERSION = '2.17';
 export const CONFIG_VERSION = '2.0';
 export const CONFIG_FILE = '.workspace-config';
 
@@ -27,6 +27,12 @@ export const NODES_DIR = 'nodes';
 export const NODE_INDEX_FILE = 'NODE_INDEX.md';
 export const INDEX_MARKER_START = '<!-- devnexus:index:start -->';
 export const INDEX_MARKER_END = '<!-- devnexus:index:end -->';
+
+// Decision constants
+export const DECISIONS_DIR = 'decisions';
+export const DECISION_INDEX_FILE = 'DECISION_INDEX.md';
+export const DECISION_MARKER_START = '<!-- devnexus:decisions:start -->';
+export const DECISION_MARKER_END = '<!-- devnexus:decisions:end -->';
 
 // Thresholds
 export const GOD_NODE_MAX = 15;           // max god nodes to surface

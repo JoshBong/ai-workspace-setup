@@ -20,7 +20,7 @@ The Obsidian vault at \`../${vaultName}/\` is the single source of truth for arc
 
 - **Architecture:** \`../${vaultName}/ARCHITECTURE_OVERVIEW.md\`
 - **API contracts:** \`../${vaultName}/API_CONTRACTS.md\` — the final authority on endpoint shapes
-- **Decisions:** \`../${vaultName}/DECISIONS.md\` — rejected approaches and why
+- **Decisions:** \`../${vaultName}/DECISIONS.md\` (project-level) + \`../${vaultName}/decisions/DECISION_INDEX.md\` (symbol-linked)
 `;
 }
 
@@ -28,9 +28,11 @@ export function decisionLogic({ vaultName }) {
   return `# Decision Logic
 
 - Before writing any code, consult \`../${vaultName}/API_CONTRACTS.md\` to ensure compatibility.
-- Before proposing an alternative approach, check \`../${vaultName}/DECISIONS.md\` — it logs rejected approaches and why they were ruled out.
+- Before proposing an alternative approach, check \`../${vaultName}/DECISIONS.md\` (project-level) and \`../${vaultName}/decisions/DECISION_INDEX.md\` (symbol-linked) — they log rejected approaches and why.
 - If a requirement is unclear, check the vault for more context before asking.
-- **Live decision capture:** When an approach fails, is abandoned, or a non-obvious choice is made mid-session, immediately suggest logging it to \`../${vaultName}/DECISIONS.md\`. Before writing, run \`cd ../${vaultName} && git pull\`. Format: \`## YYYY-MM-DD — Title (by [engineer name])\` followed by two sentences. After writing, run \`cd ../${vaultName} && git add DECISIONS.md && git commit -m "decision: [title]" && git push\`.
+- **Live decision capture:** When an approach fails, is abandoned, or a non-obvious choice is made mid-session, immediately suggest logging it. Before writing, run \`cd ../${vaultName} && git pull\`.
+  - **Symbol-linked** (about specific functions/classes): create \`../${vaultName}/decisions/YYYY-MM-DD-short-slug.md\` with Date, Author, Status: ACTIVE, Refs: [[Symbol]], and body text. Then \`cd ../${vaultName} && git add decisions/ && git commit -m "decision: [title]" && git push\`.
+  - **Project-level** (tooling, infra, process): append to \`../${vaultName}/DECISIONS.md\` with format \`## YYYY-MM-DD — Title (by [name])\` followed by two sentences. Then \`cd ../${vaultName} && git add DECISIONS.md && git commit -m "decision: [title]" && git push\`.
 `;
 }
 

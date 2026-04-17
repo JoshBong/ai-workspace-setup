@@ -81,6 +81,7 @@ function runIndex({ force = false } = {}) {
 
   if (result.bridges > 0) log.dim(`${result.bridges} bridge edges detected`);
   if (result.gaps > 0) log.warn(`${result.gaps} knowledge gaps found — see GRAPH_REPORT.md`);
+  if (result.decisions > 0) log.dim(`${result.decisions} decision${result.decisions === 1 ? '' : 's'} linked (${result.staleDecisions} stale)`);
   if (result.hasDiff) log.dim('Graph diff computed from previous index');
   console.log('');
 }
