@@ -17,12 +17,6 @@ export async function promptProjectInfo() {
     },
     {
       type: 'input',
-      name: 'techStack',
-      message: "What's your tech stack? (e.g., 'Next.js + FastAPI + Postgres')",
-      default: 'Not specified',
-    },
-    {
-      type: 'input',
       name: 'author',
       message: "What's your name? (for decision log attribution)",
       default: 'Engineer',

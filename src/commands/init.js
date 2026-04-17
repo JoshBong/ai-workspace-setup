@@ -73,17 +73,19 @@ async function runInit(opts) {
     const info = await promptProjectInfo();
     projectName = info.projectName;
     description = info.description;
-    techStack = info.techStack;
     author = info.author;
 
     repoInputs = await promptRepos();
     agents = await promptAgents();
+
+    // Auto-detect tech stack from repos
+    techStack = autoDetectTechStack(repoInputs, workspaceDir);
   } else {
     projectName = opts.name;
     description = opts.desc || 'A software project.';
-    techStack = opts.stack || 'Not specified';
     author = opts.author || 'Engineer';
     repoInputs = opts.repos || [];
+    techStack = opts.stack || autoDetectTechStack(repoInputs, workspaceDir);
 
     const agentInput = opts.agents || ['claude'];
     const { valid, invalid } = validateAgents(agentInput);
@@ -275,7 +277,7 @@ async function runJoin(vaultSource, workspaceDir, opts) {
     vaultName,
     repos: repoDirs,
     agents,
-    techStack: 'Joined existing workspace',
+    techStack: autoDetectTechStack(repoDirs, workspaceDir),
     description: `Joined ${projectName} workspace`,
     author,
     templateVersion: TEMPLATE_VERSION,
@@ -298,6 +300,21 @@ async function runJoin(vaultSource, workspaceDir, opts) {
   console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
   console.log('  2. Read the vault — your team\'s decisions and architecture are already there');
   console.log('  3. Start coding — your agents will read .ai-rules/ + the vault automatically\n');
+}
+
+function autoDetectTechStack(repoInputs, workspaceDir) {
+  const stacks = new Set();
+  for (const repo of repoInputs) {
+    const dirName = path.basename(repo, '.git');
+    const absPath = path.join(workspaceDir, dirName);
+    if (fs.existsSync(absPath)) {
+      const detected = detectStack(absPath);
+      if (detected !== 'a software project') {
+        stacks.add(detected);
+      }
+    }
+  }
+  return stacks.size > 0 ? [...stacks].join(', ') : 'Not detected';
 }
 
 function setupProfile() {
