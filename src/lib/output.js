@@ -1,5 +1,7 @@
 import chalk from 'chalk';
 
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
 export const log = {
   info:    (msg) => console.log(chalk.blue(msg)),
   success: (msg) => console.log(chalk.green(`  ${msg}`)),
@@ -32,3 +34,40 @@ export const log = {
   warnCheck: (msg) => console.log(chalk.yellow(`  [warn] ${msg}`)),
   fix:   (msg) => console.log(chalk.dim(`         Fix: ${msg}`)),
 };
+
+export function createSpinner(text) {
+  let frame = 0;
+  let interval = null;
+  const isTTY = process.stderr.isTTY;
+
+  return {
+    start() {
+      if (!isTTY) {
+        process.stderr.write(`  ${text}\n`);
+        return this;
+      }
+      interval = setInterval(() => {
+        const spinner = chalk.cyan(SPINNER_FRAMES[frame % SPINNER_FRAMES.length]);
+        process.stderr.write(`\r  ${spinner} ${text}`);
+        frame++;
+      }, 80);
+      return this;
+    },
+    succeed(msg) {
+      if (interval) clearInterval(interval);
+      if (isTTY) process.stderr.write('\r\x1b[K');
+      console.log(chalk.green(`  ✔ ${msg || text}`));
+      return this;
+    },
+    fail(msg) {
+      if (interval) clearInterval(interval);
+      if (isTTY) process.stderr.write('\r\x1b[K');
+      console.log(chalk.red(`  ✘ ${msg || text}`));
+      return this;
+    },
+    update(newText) {
+      text = newText;
+      return this;
+    },
+  };
+}

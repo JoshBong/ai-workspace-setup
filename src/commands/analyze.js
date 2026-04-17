@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { log } from '../lib/output.js';
+import { log, createSpinner } from '../lib/output.js';
 import { requireConfig } from '../lib/config.js';
 
 function runAnalyze(repoDir, workspaceDir) {
@@ -11,12 +11,12 @@ function runAnalyze(repoDir, workspaceDir) {
     log.warn(`${repoDir} not found — skipping`);
     return;
   }
-  log.plain(`  Indexing ${repoDir}...`);
+  const s = createSpinner(`Analyzing ${repoDir}...`).start();
   try {
-    execSync('npx gitnexus analyze', { cwd: absDir, stdio: 'inherit', timeout: 120000 });
-    log.success(`GitNexus index built for ${repoDir}`);
+    execSync('npx gitnexus analyze', { cwd: absDir, stdio: 'pipe', timeout: 120000 });
+    s.succeed(`Analyzed ${repoDir}`);
   } catch {
-    log.warn(`Failed — run manually: cd ${repoDir} && npx gitnexus analyze`);
+    s.fail(`Failed — run manually: cd ${repoDir} && npx gitnexus analyze`);
   }
 }
 

@@ -2,7 +2,8 @@ import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { log } from '../lib/output.js';
+import chalk from 'chalk';
+import { log, createSpinner } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
@@ -57,14 +58,13 @@ async function runAdd(repos, opts) {
     // Clone if URL
     if (isUrl && opts.clone !== false) {
       const targetPath = path.join(workspaceDir, dirName);
-      if (fs.existsSync(targetPath)) {
-        log.warn(`${dirName} directory already exists, skipping clone`);
-      } else {
+      if (!fs.existsSync(targetPath)) {
+        const cs = createSpinner(`Cloning ${dirName}...`).start();
         try {
-          log.plain(`Cloning ${repo}...`);
           gitClone(repo, workspaceDir);
+          cs.succeed(`Cloned ${dirName}`);
         } catch (err) {
-          log.error(`Failed to clone ${repo}: ${err.message}`);
+          cs.fail(`Failed to clone ${repo}: ${err.message}`);
           continue;
         }
       }
@@ -79,7 +79,6 @@ async function runAdd(repos, opts) {
       const targetPath = path.join(workspaceDir, dirName);
       if (!fs.existsSync(targetPath)) {
         fs.symlinkSync(repo, targetPath, 'dir');
-        log.success(`Symlinked ${dirName} → ${repo}`);
       }
     }
 
@@ -90,11 +89,10 @@ async function runAdd(repos, opts) {
       continue;
     }
 
-    // Detect stack
+    // Configure repo
+    const s = createSpinner(`Configuring ${dirName}...`).start();
     const repoStack = detectStack(absDir);
-    log.success(`Detected: ${repoStack}`);
 
-    // Create .ai-rules/
     const rulesDir = path.join(absDir, '.ai-rules');
     ensureDir(rulesDir);
     writeFile(path.join(rulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
@@ -103,61 +101,35 @@ async function runAdd(repos, opts) {
     writeFile(path.join(rulesDir, '04-operator-profile.md'), repoRules.operatorProfile());
     writeFile(path.join(rulesDir, '05-code-intelligence.md'), repoRules.codeIntelligence());
     writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
-    log.success(`Created ${dirName}/.ai-rules/`);
 
-    // Install contract drift pre-push hook
-    const hookResult = installContractHook(absDir, vaultName);
-    if (hookResult.installed) {
-      log.success('Installed contract drift pre-push hook');
-    } else {
-      log.warn(`Pre-push hook: ${hookResult.reason}`);
-    }
+    installContractHook(absDir, vaultName);
+    installGitNexusHook(absDir);
+    installGitNexusPostMergeHook(absDir);
 
-    // Install GitNexus post-commit hook
-    const gnHookResult = installGitNexusHook(absDir);
-    if (gnHookResult.installed) {
-      log.success('Installed GitNexus post-commit hook');
-    } else {
-      log.warn(`GitNexus hook: ${gnHookResult.reason}`);
-    }
-
-    // Install GitNexus post-merge hook (re-analyze after pulls, flag big drift)
-    const gnMergeResult = installGitNexusPostMergeHook(absDir);
-    if (gnMergeResult.installed) {
-      log.success('Installed GitNexus post-merge hook');
-    } else {
-      log.warn(`GitNexus post-merge hook: ${gnMergeResult.reason}`);
-    }
-
-    // Create pointer files
     for (const agent of agents) {
       const filename = getPointerFilename(agent);
       const filePath = path.join(absDir, filename);
       const content = pointerTemplates.repoPointer({ repoDir: dirName, repoStack });
 
-      if (writeFileIfNotExists(filePath, content)) {
-        log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
-      } else if (migrateExistingPointer(filePath, path.join(absDir, '.ai-rules'))) {
-        writeFile(filePath, content);
-        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+      if (!writeFileIfNotExists(filePath, content)) {
+        if (migrateExistingPointer(filePath, path.join(absDir, '.ai-rules'))) {
+          writeFile(filePath, content);
+        }
       }
     }
 
-    // Update .gitignore
-    const gitignoreAdded = addToGitignore(absDir, GITIGNORE_ENTRIES);
-    for (const entry of gitignoreAdded) {
-      log.success(`Added ${entry} to .gitignore`);
-    }
+    addToGitignore(absDir, GITIGNORE_ENTRIES);
+    s.succeed(`Configured ${dirName}`);
 
     // Run GitNexus if available
     try {
       execSync('npx gitnexus --version', { stdio: 'pipe', timeout: 5000 });
-      log.plain(`  Indexing ${dirName} with GitNexus...`);
+      const gs = createSpinner(`Indexing ${dirName}...`).start();
       try {
         execSync('npx gitnexus analyze', { cwd: absDir, stdio: 'pipe', timeout: 120000 });
-        log.success(`GitNexus index built for ${dirName}`);
+        gs.succeed(`Indexed ${dirName}`);
       } catch {
-        log.warn(`GitNexus indexing failed — run manually: npx gitnexus analyze`);
+        gs.fail(`GitNexus indexing failed for ${dirName} — run manually: npx gitnexus analyze`);
       }
     } catch { /* not installed, skip silently */ }
 
@@ -169,11 +141,9 @@ async function runAdd(repos, opts) {
       if (moc.includes('| (add repos) | Active | |')) {
         moc = moc.replace('| (add repos) | Active | |', `${newRow}\n| (add repos) | Active | |`);
       } else {
-        // Append after table header separator line
         moc = moc.replace(/(## Active Repos[\s\S]*?\|[-| ]+\|)\n/, `$1\n${newRow}\n`);
       }
       fs.writeFileSync(mocPath, moc, 'utf-8');
-      log.success(`Updated MOC.md`);
     }
 
     // Update SESSION_LOG.md
@@ -186,17 +156,16 @@ async function runAdd(repos, opts) {
       fs.writeFileSync(sessionLogPath, sessionLog.trimEnd() + '\n' + entry, 'utf-8');
     }
 
-    // Add to config
     existingRepos.push(dirName);
     added++;
-    log.success(`Added ${dirName} to workspace\n`);
   }
 
-  // Save updated config
   if (added > 0) {
     config.repos = existingRepos;
     writeConfig(config);
-    log.success(`Updated .workspace-config (${existingRepos.length} repos total)`);
+    console.log('');
+    console.log(chalk.green.bold(`  ✔ Added ${added} repo${added !== 1 ? 's' : ''}`));
+    console.log('');
   }
 
 }

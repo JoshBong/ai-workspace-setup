@@ -4,7 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
-import { log } from '../lib/output.js';
+import chalk from 'chalk';
+import { log, createSpinner } from '../lib/output.js';
+import { verifyBuild, applyFixes } from '../lib/verify.js';
 import { writeConfig, readConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { validateAgents, getPointerFilename, getAgentDisplay, isInlineAgent } from '../lib/agents.js';
@@ -101,52 +103,36 @@ async function runInit(opts) {
     return;
   }
 
-  // Step 1: Global AI profile
-  log.step('Step 1', 'Global AI profile');
+  console.log('');
+
+  // Phase 1: Vault
+  let s = createSpinner('Creating vault...').start();
   setupProfile();
-
-  // Symlink profile into workspace
   const profileLink = path.join(workspaceDir, 'ai-profile');
-  if (createSymlink(AI_PROFILE_DIR, profileLink)) {
-    log.success(`Linked ./ai-profile → ~/.ai-profile/`);
-  } else {
-    log.success('AI profile symlink already exists');
-  }
+  createSymlink(AI_PROFILE_DIR, profileLink);
+  createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir, repos: [] });
+  s.succeed('Creating vault...');
 
-  // Step 2: Clone/validate repos
-  log.step('Step 2', 'Setting up repos');
+  // Phase 2: Repos
+  s = createSpinner('Setting up repos...').start();
   const repoDirs = [];
   for (const repo of repoInputs) {
     const dir = await setupRepo(repo, workspaceDir, opts.clone);
     if (dir) repoDirs.push(dir);
   }
+  s.succeed('Setting up repos...');
 
-  if (repoDirs.length === 0 && repoInputs.length > 0) {
-    log.warn('No repos were set up successfully.');
-  }
-
-  // Step 3: Create Obsidian vault
-  log.step('Step 3', `Creating Obsidian vault (${vaultName})`);
-  createVault({ vaultName, projectName, description, techStack, author, date, workspaceDir, repos: repoDirs });
-
-  // Step 4: Create workspace .ai-rules/
-  log.step('Step 4', 'Creating workspace agent rules');
+  // Phase 3: Rules
+  s = createSpinner('Writing workspace rules...').start();
   createWorkspaceRules(vaultName, workspaceDir);
-
-  // Step 5: Create workspace pointer files
-  log.step('Step 5', 'Creating workspace pointer files');
   createWorkspacePointers({ projectName, vaultName, repoDirs, agents, workspaceDir });
-
-  // Step 6: Set up each repo
-  log.step('Step 6', 'Setting up agent files in repos');
   for (const repoDir of repoDirs) {
-    setupRepoFiles({
-      repoDir, projectName, vaultName, agents, workspaceDir,
-    });
+    setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir });
   }
+  s.succeed('Writing workspace rules...');
 
-  // Step 7: Save config
-  log.step('Step 7', 'Saving workspace config');
+  // Phase 4: Agents
+  s = createSpinner('Configuring agents...').start();
   writeConfig({
     projectName,
     vaultName,
@@ -157,26 +143,70 @@ async function runInit(opts) {
     author,
     templateVersion: TEMPLATE_VERSION,
   });
-  log.success('Saved .workspace-config');
+  s.succeed('Configuring agents...');
 
-  // Step 8: GitNexus (optional — per repo code graph)
+  // Phase 5: Hooks
+  s = createSpinner('Installing git hooks...').start();
+  registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
+  await installCompletion();
+  s.succeed('Installing git hooks...');
+
+  // Phase 6: GitNexus (interactive — stays verbose)
   await checkGitNexus(repoDirs, workspaceDir);
 
-  // Step 9: Register vault in vault-map.json (for vault-encoder hook)
-  registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
+  // Workspace ready
+  console.log('');
+  console.log(chalk.green.bold('  ✔ Workspace ready'));
+  console.log('');
+  console.log(`    Project:  ${projectName}`);
+  console.log(`    Vault:    ${vaultName}/`);
+  console.log(`    Repos:    ${repoDirs.length > 0 ? repoDirs.join(', ') : '(none)'}`);
+  console.log(`    Agents:   ${agents.map(a => getAgentDisplay(a)).join(', ')}`);
 
-  // Tab completion
-  await installCompletion();
+  // Phase 7: Verify
+  console.log('');
+  s = createSpinner('Verifying build...').start();
+  const results = verifyBuild({
+    projectName, vaultName, repos: repoDirs, agents,
+  });
 
-  // Done!
-  printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir });
+  if (results.fixes.length > 0) {
+    const { fixed, failed } = applyFixes(results);
+    if (failed.length === 0) {
+      s.succeed(`Build verified — ${fixed} issue${fixed !== 1 ? 's' : ''} auto-fixed`);
+      for (const fix of results.fixes) {
+        console.log(chalk.green(`    ✔ Fixed: ${fix.msg}`));
+      }
+    } else {
+      s.fail(`Build incomplete — ${failed.length} issue${failed.length !== 1 ? 's' : ''} need${failed.length === 1 ? 's' : ''} attention`);
+      for (const f of failed) {
+        console.log(chalk.red(`    ✘ ${f.msg} — ${f.error}`));
+      }
+    }
+  } else if (results.fails > 0) {
+    s.fail(`Build incomplete — ${results.fails} issue${results.fails !== 1 ? 's' : ''} need${results.fails === 1 ? 's' : ''} attention`);
+    for (const issue of results.issues.filter(i => i.level === 'fail')) {
+      console.log(chalk.red(`    ✘ ${issue.msg}`));
+    }
+    console.log('');
+    console.log(`    After fixing, run: ${chalk.cyan('devnexus doctor')}`);
+  } else {
+    s.succeed(`Build verified — 0 issues`);
+  }
+
+  // Next steps
+  console.log('');
+  console.log('  Next steps:');
+  console.log(`    1. Open ${chalk.bold(vaultName + '/')} in Obsidian`);
+  console.log('    2. Start your AI agent — it reads the vault automatically');
+  console.log('');
+  console.log(chalk.dim('    Docs: https://github.com/JoshBong/devnexus/tree/main/docs'));
+  console.log('');
 }
 
 async function runJoin(vaultSource, workspaceDir, opts) {
   log.header('Joining Existing Workspace');
 
-  // Step 1: Resolve the vault
-  log.step('Step 1', 'Locating vault');
   const isUrl = vaultSource.startsWith('http') || vaultSource.startsWith('git@');
   let vaultName;
 
@@ -184,13 +214,9 @@ async function runJoin(vaultSource, workspaceDir, opts) {
     vaultName = path.basename(vaultSource, '.git');
     const targetPath = path.join(workspaceDir, vaultName);
 
-    if (fs.existsSync(targetPath)) {
-      log.success(`Found existing vault folder: ${vaultName}`);
-    } else {
-      log.plain(`Cloning vault from ${vaultSource}...`);
+    if (!fs.existsSync(targetPath)) {
       try {
         gitClone(vaultSource, workspaceDir);
-        log.success(`Cloned ${vaultName}`);
       } catch (err) {
         log.error(`Failed to clone vault: ${err.message}`);
         process.exit(1);
@@ -202,7 +228,6 @@ async function runJoin(vaultSource, workspaceDir, opts) {
       log.error(`Vault folder '${vaultName}' not found in ${workspaceDir}`);
       process.exit(1);
     }
-    log.success(`Found vault: ${vaultName}`);
   }
 
   // Verify it's actually a vault (has MOC.md)
@@ -217,20 +242,10 @@ async function runJoin(vaultSource, workspaceDir, opts) {
     ? vaultName.slice(0, -6)
     : vaultName;
 
-  log.success(`Project: ${projectName}`);
-
-  // Step 2: Global AI profile
-  log.step('Step 2', 'Global AI profile');
   setupProfile();
-
   const profileLink = path.join(workspaceDir, 'ai-profile');
-  if (createSymlink(AI_PROFILE_DIR, profileLink)) {
-    log.success(`Linked ./ai-profile → ~/.ai-profile/`);
-  } else {
-    log.success('AI profile symlink already exists');
-  }
+  createSymlink(AI_PROFILE_DIR, profileLink);
 
-  // Step 3: Your name + repos + agents
   const { author } = await inquirer.prompt([
     {
       type: 'input',
@@ -240,7 +255,6 @@ async function runJoin(vaultSource, workspaceDir, opts) {
     },
   ]);
 
-  log.step('Step 3', 'Setting up repos');
   const repoInputs = await promptRepos();
   const repoDirs = [];
   for (const repo of repoInputs) {
@@ -254,52 +268,82 @@ async function runJoin(vaultSource, workspaceDir, opts) {
 
   const agents = await promptAgents();
 
-  // Step 5: Create workspace .ai-rules/
-  log.step('Step 5', 'Creating workspace agent rules');
+  console.log('');
+
+  // Phase: Rules + agents
+  let s = createSpinner('Writing workspace rules...').start();
   createWorkspaceRules(vaultName, workspaceDir);
-
-  // Step 6: Create workspace pointer files
-  log.step('Step 6', 'Creating workspace pointer files');
   createWorkspacePointers({ projectName, vaultName, repoDirs, agents, workspaceDir });
-
-  // Step 7: Set up each repo
-  log.step('Step 7', 'Setting up agent files in repos');
   for (const repoDir of repoDirs) {
-    setupRepoFiles({
-      repoDir, projectName, vaultName, agents, workspaceDir,
-    });
+    setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir });
   }
+  s.succeed('Writing workspace rules...');
 
-  // Step 8: Save config
-  log.step('Step 8', 'Saving workspace config');
+  s = createSpinner('Configuring agents...').start();
+  const techStack = autoDetectTechStack(repoDirs, workspaceDir);
   writeConfig({
     projectName,
     vaultName,
     repos: repoDirs,
     agents,
-    techStack: autoDetectTechStack(repoDirs, workspaceDir),
+    techStack,
     description: `Joined ${projectName} workspace`,
     author,
     templateVersion: TEMPLATE_VERSION,
   });
-  log.success('Saved .workspace-config');
+  s.succeed('Configuring agents...');
 
-  // Step 9: GitNexus (optional — per repo code graph)
+  s = createSpinner('Installing git hooks...').start();
+  registerVaultMap(vaultName, vaultDir);
+  s.succeed('Installing git hooks...');
+
   await checkGitNexus(repoDirs, workspaceDir);
 
-  // Step 10: Register vault in vault-map.json
-  registerVaultMap(vaultName, vaultDir);
+  // Summary
+  console.log('');
+  console.log(chalk.green.bold('  ✔ Workspace ready'));
+  console.log('');
+  console.log(`    Project:  ${projectName}`);
+  console.log(`    Vault:    ${vaultName}/ (existing — not modified)`);
+  console.log(`    Repos:    ${repoDirs.length > 0 ? repoDirs.join(', ') : '(none)'}`);
+  console.log(`    Agents:   ${agents.map(a => getAgentDisplay(a)).join(', ')}`);
 
-  // Done
-  log.header('Join Complete!');
-  console.log(`\nYou've joined the ${projectName} workspace.\n`);
-  console.log(`  Vault:   ${vaultName}/ (existing — not modified)`);
-  console.log(`  Repos:   ${repoDirs.length > 0 ? repoDirs.join(', ') : '(none)'}`);
-  console.log(`  Agents:  ${agents.join(', ')}`);
-  console.log('\nNext steps:\n');
-  console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
-  console.log('  2. Read the vault — your team\'s decisions and architecture are already there');
-  console.log('  3. Start coding — your agents will read .ai-rules/ + the vault automatically\n');
+  // Verify
+  console.log('');
+  s = createSpinner('Verifying build...').start();
+  const results = verifyBuild({ projectName, vaultName, repos: repoDirs, agents });
+
+  if (results.fixes.length > 0) {
+    const { fixed, failed } = applyFixes(results);
+    if (failed.length === 0) {
+      s.succeed(`Build verified — ${fixed} issue${fixed !== 1 ? 's' : ''} auto-fixed`);
+      for (const fix of results.fixes) {
+        console.log(chalk.green(`    ✔ Fixed: ${fix.msg}`));
+      }
+    } else {
+      s.fail(`Build incomplete — ${failed.length} issue${failed.length !== 1 ? 's' : ''} need${failed.length === 1 ? 's' : ''} attention`);
+      for (const f of failed) {
+        console.log(chalk.red(`    ✘ ${f.msg} — ${f.error}`));
+      }
+    }
+  } else if (results.fails > 0) {
+    s.fail(`Build incomplete — ${results.fails} issue${results.fails !== 1 ? 's' : ''} need${results.fails === 1 ? 's' : ''} attention`);
+    for (const issue of results.issues.filter(i => i.level === 'fail')) {
+      console.log(chalk.red(`    ✘ ${issue.msg}`));
+    }
+    console.log('');
+    console.log(`    After fixing, run: ${chalk.cyan('devnexus doctor')}`);
+  } else {
+    s.succeed('Build verified — 0 issues');
+  }
+
+  console.log('');
+  console.log('  Next steps:');
+  console.log(`    1. Open ${chalk.bold(vaultName + '/')} in Obsidian`);
+  console.log('    2. Start your AI agent — it reads the vault automatically');
+  console.log('');
+  console.log(chalk.dim('    Docs: https://github.com/JoshBong/devnexus/tree/main/docs'));
+  console.log('');
 }
 
 function autoDetectTechStack(repoInputs, workspaceDir) {
@@ -323,9 +367,6 @@ function setupProfile() {
     writeFile(path.join(AI_PROFILE_DIR, 'WORKING_STYLE.md'), profileTemplates.workingStyle());
     writeFile(path.join(AI_PROFILE_DIR, 'PREFERENCES.md'), profileTemplates.preferences());
     writeFile(path.join(AI_PROFILE_DIR, 'CORRECTIONS.md'), profileTemplates.corrections());
-    log.success('Created ~/.ai-profile/ — starts empty, fills in as you work');
-  } else {
-    log.success('Found existing AI profile at ~/.ai-profile/ — keeping it');
   }
 }
 
@@ -336,28 +377,18 @@ async function setupRepo(repo, workspaceDir, shouldClone) {
     const dirName = path.basename(repo, '.git');
     const targetPath = path.join(workspaceDir, dirName);
 
-    if (fs.existsSync(targetPath)) {
-      log.warn(`${dirName} already exists, skipping clone`);
-      return dirName;
-    }
+    if (fs.existsSync(targetPath)) return dirName;
 
     try {
-      log.plain(`Cloning ${repo}...`);
       gitClone(repo, workspaceDir);
       return dirName;
-    } catch (err) {
-      log.error(`Failed to clone ${repo}: ${err.message}`);
+    } catch {
       return null;
     }
   } else {
     const dirName = isUrl ? path.basename(repo, '.git') : repo;
-    if (fs.existsSync(path.join(workspaceDir, dirName))) {
-      log.success(`Found existing folder: ${dirName}`);
-      return dirName;
-    } else {
-      log.error(`Folder '${dirName}' not found — skipping`);
-      return null;
-    }
+    if (fs.existsSync(path.join(workspaceDir, dirName))) return dirName;
+    return null;
   }
 }
 
@@ -385,22 +416,13 @@ function createVault({ vaultName, projectName, description, techStack, author, d
   writeFile(path.join(vaultDir, 'SESSION_LOG.md'), vaultTemplates.sessionLog());
   writeFile(path.join(vaultDir, 'GRAPH_REPORT.md'), vaultTemplates.graphReport({ projectName, date }));
 
-  log.success(`Created ${vaultName}/ with MOC.md, ARCHITECTURE_OVERVIEW.md, GRAPH_REPORT.md, API_CONTRACTS.md, DECISIONS.md, SESSION_LOG.md`);
-
   // Init git in vault
   if (!isGitRepo(vaultDir)) {
     gitInit(vaultDir);
     gitAddAll(vaultDir);
     try {
       gitCommit(vaultDir, 'vault: initial setup');
-      log.success('Initialized git in vault');
-    } catch {
-      log.warn('Git init succeeded but initial commit failed (check your git signing config)');
-      log.warn('You can commit manually: cd ' + vaultName + ' && git commit -m "vault: initial setup"');
-    }
-    log.warn(`Add a remote: cd ${vaultName} && git remote add origin <your-vault-repo-url> && git push -u origin main`);
-  } else {
-    log.success('Vault already has git initialized');
+    } catch { /* git signing may not be configured — non-fatal */ }
   }
 }
 
@@ -413,8 +435,6 @@ function createWorkspaceRules(vaultName, workspaceDir) {
   writeFile(path.join(rulesDir, '03-contract-drift.md'), workspaceRules.contractDrift({ vaultName }));
   writeFile(path.join(rulesDir, '04-profile-rules.md'), workspaceRules.profileRules());
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
-
-  log.success('Created .ai-rules/ with agent instructions');
 }
 
 function createWorkspacePointers({ projectName, vaultName, repoDirs, agents, workspaceDir }) {
@@ -425,20 +445,14 @@ function createWorkspacePointers({ projectName, vaultName, repoDirs, agents, wor
     const filePath = path.join(workspaceDir, filename);
 
     if (isInlineAgent(agent)) {
-      // Inline agents get the full concatenated rules
       const rules = concatenateRules(rulesDir);
       writeManagedPointer(filePath, rules);
-      log.success(`Created ${filename} (${getAgentDisplay(agent)}) — inline rules`);
     } else {
-      // Indirection agents get a thin pointer
       const content = pointers.workspacePointer({ projectName, vaultName, repos: repoDirs });
-      if (writeFileIfNotExists(filePath, content)) {
-        log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
-      } else if (migrateExistingPointer(filePath, rulesDir)) {
-        writeFile(filePath, content);
-        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
-      } else {
-        log.plain(`  ${filename} already configured`);
+      if (!writeFileIfNotExists(filePath, content)) {
+        if (migrateExistingPointer(filePath, rulesDir)) {
+          writeFile(filePath, content);
+        }
       }
     }
   }
@@ -448,12 +462,8 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
   const absRepoDir = path.join(workspaceDir, repoDir);
   if (!fs.existsSync(absRepoDir)) return;
 
-  console.log('');
-  log.bold(`  ${repoDir}/`);
-
   const repoStack = detectStack(absRepoDir);
 
-  // Create .ai-rules/
   const rulesDir = path.join(absRepoDir, '.ai-rules');
   ensureDir(rulesDir);
 
@@ -464,33 +474,11 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
   writeFile(path.join(rulesDir, '05-code-intelligence.md'), repoRules.codeIntelligence());
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
 
-  log.success('Created .ai-rules/');
-
   // Install contract drift pre-push hook
-  const hookResult = installContractHook(absRepoDir, vaultName);
-  if (hookResult.installed) {
-    log.success('Installed contract drift pre-push hook');
-  } else {
-    log.warn(`Pre-push hook: ${hookResult.reason}`);
-  }
+  installContractHook(absRepoDir, vaultName);
+  installGitNexusHook(absRepoDir);
+  installGitNexusPostMergeHook(absRepoDir);
 
-  // Install GitNexus post-commit hook
-  const gnHookResult = installGitNexusHook(absRepoDir);
-  if (gnHookResult.installed) {
-    log.success('Installed GitNexus post-commit hook');
-  } else {
-    log.warn(`GitNexus hook: ${gnHookResult.reason}`);
-  }
-
-  // Install GitNexus post-merge hook (re-analyze after pulls, flag big drift)
-  const gnMergeResult = installGitNexusPostMergeHook(absRepoDir);
-  if (gnMergeResult.installed) {
-    log.success('Installed GitNexus post-merge hook');
-  } else {
-    log.warn(`GitNexus post-merge hook: ${gnMergeResult.reason}`);
-  }
-
-  // Create pointer files
   const repoRulesDir = path.join(absRepoDir, '.ai-rules');
   for (const agent of agents) {
     const filename = getPointerFilename(agent);
@@ -498,29 +486,20 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
 
     if (isInlineAgent(agent)) {
       const rules = concatenateRules(repoRulesDir);
-      // Mirror GitNexus block from CLAUDE.md if it exists
       const gnBlock = extractGitNexusBlock(path.join(absRepoDir, 'CLAUDE.md'));
       const fullContent = gnBlock ? `${rules}\n\n${gnBlock}` : rules;
       writeManagedPointer(filePath, fullContent);
-      log.success(`Created ${filename} (${getAgentDisplay(agent)}) — inline rules`);
     } else {
       const content = pointers.repoPointer({ repoDir, repoStack });
-      if (writeFileIfNotExists(filePath, content)) {
-        log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
-      } else if (migrateExistingPointer(filePath, repoRulesDir)) {
-        writeFile(filePath, content);
-        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
-      } else {
-        log.plain(`  ${filename} already configured`);
+      if (!writeFileIfNotExists(filePath, content)) {
+        if (migrateExistingPointer(filePath, repoRulesDir)) {
+          writeFile(filePath, content);
+        }
       }
     }
   }
 
-  // Update .gitignore
-  const added = addToGitignore(absRepoDir, GITIGNORE_ENTRIES);
-  for (const entry of added) {
-    log.success(`Added ${entry} to .gitignore`);
-  }
+  addToGitignore(absRepoDir, GITIGNORE_ENTRIES);
 }
 
 async function checkGitNexus(repoDirs, workspaceDir) {
@@ -532,8 +511,8 @@ async function checkGitNexus(repoDirs, workspaceDir) {
   } catch { /* not available */ }
 
   if (!hasGitNexus) {
-    log.step('Step 8', 'GitNexus — code intelligence');
-    log.plain('  GitNexus gives agents blast-radius analysis, execution flow tracing, and safe renames.');
+    console.log('');
+    log.plain('GitNexus gives agents blast-radius analysis, execution flow tracing, and safe renames.');
     const { install } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -544,30 +523,28 @@ async function checkGitNexus(repoDirs, workspaceDir) {
     ]);
 
     if (install) {
-      log.plain('  Installing GitNexus...');
+      const is = createSpinner('Installing GitNexus...').start();
       try {
         execSync('npm install -g gitnexus', { stdio: 'pipe', timeout: 120000 });
-        log.success('GitNexus installed');
+        is.succeed('GitNexus installed');
         hasGitNexus = true;
-      } catch (err) {
-        log.warn(`GitNexus install failed: ${err.message}`);
-        log.warn('Install manually: npm install -g gitnexus');
+      } catch {
+        is.fail('GitNexus install failed — install manually: npm install -g gitnexus');
       }
     } else {
-      log.warn('Skipped — you can install later: npm install -g gitnexus');
+      log.dim('Skipped — install later: npm install -g gitnexus');
     }
   }
 
   if (hasGitNexus) {
-    log.step('Step 8', 'Indexing repos with GitNexus');
     for (const repoDir of repoDirs) {
       const abs = path.join(workspaceDir, repoDir);
       if (fs.existsSync(abs)) {
-        log.plain(`  Indexing ${repoDir}...`);
+        const gs = createSpinner(`Indexing ${repoDir}...`).start();
         try {
           execSync('npx gitnexus analyze', { cwd: abs, stdio: 'pipe', timeout: 120000 });
-          log.success(`GitNexus index built for ${repoDir}`);
-        } catch { log.warn(`GitNexus indexing failed for ${repoDir} — run manually: npx gitnexus analyze`); }
+          gs.succeed(`Indexed ${repoDir}`);
+        } catch { gs.fail(`GitNexus indexing failed for ${repoDir} — run manually: npx gitnexus analyze`); }
       }
     }
   }
@@ -580,20 +557,13 @@ function registerVaultMap(vaultName, vaultAbsPath) {
     map = JSON.parse(fs.readFileSync(vaultMapPath, 'utf-8'));
   } catch { /* create fresh */ }
 
-  if (map[vaultName]) {
-    log.success(`Vault already registered in vault-map.json`);
-    return;
-  }
+  if (map[vaultName]) return;
 
   map[vaultName] = vaultAbsPath;
   try {
     fs.mkdirSync(path.dirname(vaultMapPath), { recursive: true });
     fs.writeFileSync(vaultMapPath, JSON.stringify(map, null, 2) + '\n');
-    log.success(`Registered ${vaultName} in ~/.claude/vault-map.json`);
-    log.plain('  Vault-encoder hook will now inject vault context into every session.');
-  } catch (err) {
-    log.warn(`Could not write vault-map.json: ${err.message}`);
-  }
+  } catch { /* non-fatal */ }
 }
 
 
@@ -622,40 +592,3 @@ function printDryRun({ projectName, vaultName, repoInputs, agents, workspaceDir 
   }
 }
 
-function printSummary({ projectName, vaultName, repoDirs, agents, workspaceDir }) {
-  log.header('Setup Complete!');
-
-  console.log('Your workspace:\n');
-  console.log('  ~/.ai-profile/               <- Global AI profile (learns over time)');
-  console.log('');
-  console.log(`  ${workspaceDir}/`);
-  console.log('  |-- .ai-rules/               <- Agent instructions (auto-updated)');
-  console.log('  |-- ai-profile/              <- Symlink -> ~/.ai-profile/');
-
-  for (const agent of agents) {
-    const f = getPointerFilename(agent);
-    console.log(`  |-- ${f.padEnd(25)} <- ${getAgentDisplay(agent)} pointer (yours to customize)`);
-  }
-
-  console.log(`  |-- ${vaultName}/`);
-  console.log('  |   |-- MOC.md               <- Entry point — read this first each session');
-  console.log('  |   |-- ARCHITECTURE_OVERVIEW.md  <- How your system works');
-  console.log('  |   |-- GRAPH_REPORT.md      <- Structural analysis (populate with devnexus index)');
-  console.log('  |   |-- API_CONTRACTS.md     <- Endpoint shapes');
-  console.log('  |   |-- DECISIONS.md         <- What was tried and why');
-  console.log('  |   |-- SESSION_LOG.md       <- Session handoff notes');
-
-  for (const repoDir of repoDirs) {
-    console.log(`  |-- ${repoDir}/`);
-    console.log('  |   |-- .ai-rules/           <- Agent instructions');
-    console.log('  |   |-- .gitnexus/           <- Code knowledge graph (GitNexus)');
-  }
-
-  console.log('\nNext steps:\n');
-  console.log(`  1. Open ${vaultName}/ in Obsidian, install the 'Obsidian Git' community plugin`);
-  console.log(`  2. Add a remote to the vault: cd ${vaultName} && git remote add origin <url>`);
-  console.log('  3. Fill in ARCHITECTURE_OVERVIEW.md with how your project works');
-  console.log('  4. Run devnexus index to generate GRAPH_REPORT.md + code graph');
-  console.log('  5. Start coding — your agents will read .ai-rules/ + GitNexus automatically');
-  console.log("  6. To update rules after a new release: devnexus update\n");
-}

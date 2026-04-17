@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
-import { log } from '../lib/output.js';
+import chalk from 'chalk';
+import { log, createSpinner } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { ensureDir, writeFile, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
@@ -62,17 +63,17 @@ async function runUpdate(opts) {
     return;
   }
 
-  // Update workspace .ai-rules/ (unless targeting a specific repo)
-  if (!opts.repo) {
-    log.info('Updating workspace .ai-rules/...');
-    updateWorkspaceRules(vaultName);
-    log.success(`Updated workspace .ai-rules/ -> v${TEMPLATE_VERSION}`);
+  console.log('');
+  const updated = [];
 
-    // Sync inline agent pointers at workspace level
+  if (!opts.repo) {
+    let s = createSpinner('Updating workspace rules...').start();
+    updateWorkspaceRules(vaultName);
     syncInlinePointers(path.resolve('.'), agents);
+    s.succeed('Updating workspace rules...');
+    updated.push('.ai-rules/ (workspace)');
   }
 
-  // Update repo .ai-rules/
   for (const repoDir of targetRepos) {
     const absDir = path.resolve(repoDir);
     if (!fs.existsSync(absDir)) {
@@ -80,43 +81,32 @@ async function runUpdate(opts) {
       continue;
     }
 
-    log.info(`Updating ${repoDir}/.ai-rules/...`);
+    const s = createSpinner(`Updating ${repoDir}...`).start();
     const repoStack = detectStack(absDir);
     updateRepoRules(absDir, { projectName, vaultName, repoStack, agents });
     syncInlinePointers(absDir, agents);
-    log.success(`Updated ${repoDir}/.ai-rules/ -> v${TEMPLATE_VERSION}`);
+    s.succeed(`Updating ${repoDir}...`);
+    updated.push(`${repoDir}/.ai-rules/`);
   }
 
-  // Update config version
+  const s = createSpinner('Saving config...').start();
   config.templateVersion = TEMPLATE_VERSION;
   writeConfig(config);
+  s.succeed('Saving config...');
 
-  log.header('Update Complete!');
-
-  console.log('Updated:');
-  if (!opts.repo) console.log('  * .ai-rules/ (workspace)');
-  for (const repo of targetRepos) {
-    if (fs.existsSync(path.resolve(repo))) {
-      console.log(`  * ${repo}/.ai-rules/`);
-    }
+  console.log('');
+  console.log(chalk.green.bold(`  ✔ Updated to v${TEMPLATE_VERSION}`));
+  console.log('');
+  for (const item of updated) {
+    console.log(`    ${item}`);
   }
-
-  // Show which inline pointers were synced
   const inlineAgents = agents.filter(a => isInlineAgent(a));
   if (inlineAgents.length > 0) {
-    console.log('\nSynced inline rules:');
     for (const agent of inlineAgents) {
-      console.log(`  * ${getPointerFilename(agent)} (${getAgentDisplay(agent)})`);
+      console.log(`    ${getPointerFilename(agent)} (${getAgentDisplay(agent)}) — synced`);
     }
   }
-
-  console.log('\nNot touched:');
-  const nonInline = agents.filter(a => !isInlineAgent(a));
-  if (nonInline.length > 0) {
-    console.log(`  - ${nonInline.map(a => getPointerFilename(a)).join(', ')} (yours to customize)`);
-  }
-  console.log('  - Your vault content (ARCHITECTURE.md, DECISIONS.md, etc.)');
-  console.log('  - Your AI profile (~/.ai-profile/)\n');
+  console.log('');
 }
 
 function getCurrentVersion() {
@@ -160,7 +150,6 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents
     if (migrateExistingPointer(filePath, rulesDir)) {
       const content = pointerTemplates.repoPointer({ repoDir: path.basename(absRepoDir), repoStack });
       writeFile(filePath, content);
-      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
     }
   }
 
@@ -174,20 +163,9 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents
   writeFile(path.join(rulesDir, '05-code-intelligence.md'), repoRules.codeIntelligence());
   writeFile(path.join(rulesDir, 'version.txt'), TEMPLATE_VERSION + '\n');
 
-  const hookResult = installContractHook(absRepoDir, vaultName);
-  if (hookResult.installed) {
-    log.success(`${path.basename(absRepoDir)}: contract drift hook ${hookResult.updated ? 'updated' : 'installed'}`);
-  }
-
-  const gnHookResult = installGitNexusHook(absRepoDir);
-  if (gnHookResult.installed) {
-    log.success(`${path.basename(absRepoDir)}: GitNexus post-commit hook ${gnHookResult.updated ? 'updated' : 'installed'}`);
-  }
-
-  const gnMergeResult = installGitNexusPostMergeHook(absRepoDir);
-  if (gnMergeResult.installed) {
-    log.success(`${path.basename(absRepoDir)}: GitNexus post-merge hook ${gnMergeResult.updated ? 'updated' : 'installed'}`);
-  }
+  installContractHook(absRepoDir, vaultName);
+  installGitNexusHook(absRepoDir);
+  installGitNexusPostMergeHook(absRepoDir);
 }
 
 function syncInlinePointers(dir, agents) {
@@ -203,7 +181,6 @@ function syncInlinePointers(dir, agents) {
     const filename = getPointerFilename(agent);
     const filePath = path.join(dir, filename);
     writeManagedPointer(filePath, fullContent);
-    log.success(`Synced ${filename} (${getAgentDisplay(agent)}) — inline rules`);
   }
 }
 

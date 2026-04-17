@@ -1,7 +1,7 @@
 import os from 'os';
 import path from 'path';
 
-export const TEMPLATE_VERSION = '2.14';
+export const TEMPLATE_VERSION = '2.15';
 export const CONFIG_VERSION = '2.0';
 export const CONFIG_FILE = '.workspace-config';
 

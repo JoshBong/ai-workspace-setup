@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { log } from '../lib/output.js';
+import { log, createSpinner } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { buildIndex } from '../lib/index-builder.js';
 import { hasIndex } from '../lib/gitnexus-query.js';
@@ -60,8 +60,8 @@ function runIndex({ force = false } = {}) {
     return;
   }
 
-  log.header('devnexus index');
-  console.log(chalk.dim(`  Querying GitNexus for ${repos.length} repo(s)...\n`));
+  console.log('');
+  const s = createSpinner(`Building index from ${repos.length} repo(s)...`).start();
 
   const prevSnapshot = config.indexSnapshot || null;
   const result = buildIndex(workspaceDir, vaultName, repos, prevSnapshot);
@@ -77,18 +77,10 @@ function runIndex({ force = false } = {}) {
   config.indexSnapshot = result.snapshot;
   writeConfig(config);
 
-  console.log('');
-  log.success(`${result.totalSymbols} symbols indexed`);
-  log.success(`${result.communities} communities detected`);
-  log.success(`${result.godNodes} god nodes surfaced (by betweenness centrality)`);
-  log.success(`${result.bridges} bridge edges detected`);
+  s.succeed(`Index built — ${result.totalSymbols} symbols, ${result.communities} communities, ${result.godNodes} god nodes`);
+
+  if (result.bridges > 0) log.dim(`${result.bridges} bridge edges detected`);
   if (result.gaps > 0) log.warn(`${result.gaps} knowledge gaps found — see GRAPH_REPORT.md`);
-  if (result.hasDiff) log.success('Graph diff computed from previous index');
-  console.log('');
-  log.plain(`Vault files written:`);
-  log.plain(`  ${vaultName}/NODE_INDEX.md — full symbol table with BC scores`);
-  log.plain(`  ${vaultName}/GRAPH_REPORT.md — structural analysis, bridges, gaps`);
-  log.plain(`  ${vaultName}/nodes/ — community directories with symbol files`);
-  log.plain(`  ${vaultName}/ARCHITECTURE_OVERVIEW.md — god node summary injected`);
+  if (result.hasDiff) log.dim('Graph diff computed from previous index');
   console.log('');
 }
