@@ -55,7 +55,7 @@ export function agentCommand() {
             type: 'list',
             name: 'picked',
             message: 'Which agent to add?',
-            choices: available.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+            choices: available,
           }]);
           agent = picked;
         }
@@ -85,7 +85,7 @@ export function agentCommand() {
             type: 'list',
             name: 'picked',
             message: 'Which agent to remove?',
-            choices: current.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+            choices: current,
           }]);
           agent = picked;
         }
@@ -282,7 +282,6 @@ async function runAgentInteractive() {
   const choices = [
     { name: 'Add an agent', value: 'add' },
     { name: 'Remove an agent', value: 'rm' },
-    { name: 'List agent status', value: 'ls' },
   ];
 
   const { action } = await inquirer.prompt([{
@@ -292,9 +291,7 @@ async function runAgentInteractive() {
     choices,
   }]);
 
-  if (action === 'ls') {
-    runAgentLs();
-  } else if (action === 'add') {
+  if (action === 'add') {
     const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
     if (available.length === 0) {
       log.plain('All agents are already configured.');
@@ -304,7 +301,7 @@ async function runAgentInteractive() {
       type: 'list',
       name: 'picked',
       message: 'Which agent to add?',
-      choices: available.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+      choices: available,
     }]);
     await runAgentAdd(picked, {});
   } else if (action === 'rm') {
@@ -316,7 +313,7 @@ async function runAgentInteractive() {
       type: 'list',
       name: 'picked',
       message: 'Which agent to remove?',
-      choices: current.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+      choices: current,
     }]);
     await runAgentRm(picked, {});
   }
