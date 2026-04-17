@@ -276,28 +276,48 @@ async function runAgentInteractive() {
   const current = config.agents ?? [];
 
   console.log('');
-  console.log(chalk.bold('Currently configured: ') + (current.length ? current.join(', ') : chalk.dim('none')));
+  console.log(chalk.bold('Configured agents: ') + (current.length ? current.join(', ') : chalk.dim('none')));
   console.log('');
 
-  const selected = await promptAgents({ preselected: current, fallback: current });
-  const toAdd = selected.filter(a => !current.includes(a));
-  const toRemove = current.filter(a => !selected.includes(a));
+  const choices = [
+    { name: 'Add an agent', value: 'add' },
+    { name: 'Remove an agent', value: 'rm' },
+    { name: 'List agent status', value: 'ls' },
+  ];
 
-  if (toAdd.length === 0 && toRemove.length === 0) {
-    log.plain('No changes.');
-    return;
-  }
+  const { action } = await inquirer.prompt([{
+    type: 'list',
+    name: 'action',
+    message: 'What do you want to do?',
+    choices,
+  }]);
 
-  for (const agent of toAdd) {
-    await runAgentAdd(agent, {});
+  if (action === 'ls') {
+    runAgentLs();
+  } else if (action === 'add') {
+    const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
+    if (available.length === 0) {
+      log.plain('All agents are already configured.');
+      return;
+    }
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: 'Which agent to add?',
+      choices: available.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+    }]);
+    await runAgentAdd(picked, {});
+  } else if (action === 'rm') {
+    if (current.length === 0) {
+      log.plain('No agents configured.');
+      return;
+    }
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: 'Which agent to remove?',
+      choices: current.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+    }]);
+    await runAgentRm(picked, {});
   }
-  for (const agent of toRemove) {
-    await runAgentRm(agent, { yes: true });
-  }
-
-  console.log('');
-  const summary = [];
-  if (toAdd.length) summary.push(`added ${toAdd.join(', ')}`);
-  if (toRemove.length) summary.push(`removed ${toRemove.join(', ')}`);
-  log.success(`Done — ${summary.join('; ')}.`);
 }
