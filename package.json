@@ -1,6 +1,6 @@
 {
   "name": "devnexus",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Give your AI agents a shared brain across repos. Multi-dev AI engineering made easy.",
   "type": "module",
   "bin": {

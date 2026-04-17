@@ -156,6 +156,7 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents
   if (existingRules && !fs.existsSync(path.join(rulesDir, '00-existing-rules.md'))) {
     writeFile(path.join(rulesDir, '00-existing-rules.md'), existingRules);
   }
+  writeFile(path.join(rulesDir, '00-gate.md'), repoRules.gate());
   writeFile(path.join(rulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
   writeFile(path.join(rulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
   writeFile(path.join(rulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));

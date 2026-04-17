@@ -1,3 +1,16 @@
+export function gate() {
+  return `# ⚠ STOP — Read Before Any Edit
+
+If this repo has a \`.gitnexus/\` directory:
+
+1. **Before editing any function/class/method** → run \`gitnexus_impact({target: "symbolName", direction: "upstream"})\` and check the blast radius. No exceptions.
+2. **Before searching for how something works** → try \`gitnexus_query({query: "concept"})\` before grep. It returns ranked, process-grouped results.
+3. **Before committing** → run \`gitnexus_detect_changes({scope: "staged"})\` to verify only expected symbols changed.
+
+If \`.gitnexus/\` does not exist, skip this rule.
+`;
+}
+
 export function sourceOfTruth({ projectName, repoStack, vaultName }) {
   return `# Source of Truth
 

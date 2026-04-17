@@ -95,6 +95,7 @@ async function runAdd(repos, opts) {
 
     const rulesDir = path.join(absDir, '.ai-rules');
     ensureDir(rulesDir);
+    writeFile(path.join(rulesDir, '00-gate.md'), repoRules.gate());
     writeFile(path.join(rulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
     writeFile(path.join(rulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
     writeFile(path.join(rulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));

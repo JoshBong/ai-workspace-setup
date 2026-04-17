@@ -121,6 +121,7 @@ export function verifyBuild(config) {
       fail(`${repoDir}/.ai-rules/ not found`, () => {
         const repoStack = detectStack(absDir);
         ensureDir(repoRulesDir);
+        writeFile(path.join(repoRulesDir, '00-gate.md'), repoRules.gate());
         writeFile(path.join(repoRulesDir, '01-source-of-truth.md'), repoRules.sourceOfTruth({ projectName, repoStack, vaultName }));
         writeFile(path.join(repoRulesDir, '02-decision-logic.md'), repoRules.decisionLogic({ vaultName }));
         writeFile(path.join(repoRulesDir, '03-contract-drift.md'), repoRules.contractDrift({ vaultName }));
