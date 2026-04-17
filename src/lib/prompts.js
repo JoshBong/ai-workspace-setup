@@ -11,12 +11,6 @@ export async function promptProjectInfo() {
     },
     {
       type: 'input',
-      name: 'description',
-      message: 'Describe your project (1-2 sentences):',
-      default: 'A software project.',
-    },
-    {
-      type: 'input',
       name: 'author',
       message: "What's your name? (for decision log attribution)",
       default: 'Engineer',

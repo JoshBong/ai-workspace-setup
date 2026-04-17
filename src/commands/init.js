@@ -72,7 +72,7 @@ async function runInit(opts) {
   if (isInteractive) {
     const info = await promptProjectInfo();
     projectName = info.projectName;
-    description = info.description;
+    description = opts.desc || `${projectName} workspace`;
     author = info.author;
 
     repoInputs = await promptRepos();

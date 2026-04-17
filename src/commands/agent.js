@@ -38,10 +38,16 @@ export function agentCommand() {
   cmd
     .command('add')
     .description('Add an agent to the workspace')
-    .argument('<agent>', `Agent to add (${SUPPORTED_AGENTS.join(', ')})`)
+    .argument('[agent]', `Agent to add (${SUPPORTED_AGENTS.join(', ')})`)
     .option('--repo <name>', 'Only add to a specific repo')
     .action(async (agent, opts) => {
       try {
+        if (!agent) {
+          console.log(`\nAvailable agents: ${SUPPORTED_AGENTS.join(', ')}\n`);
+          console.log(`Usage: devnexus agent add <agent>\n`);
+          console.log(`Example: devnexus agent add cursor`);
+          return;
+        }
         await runAgentAdd(agent, opts);
       } catch (err) {
         log.error(err.message);
@@ -52,11 +58,19 @@ export function agentCommand() {
   cmd
     .command('rm')
     .description('Remove an agent from the workspace')
-    .argument('<agent>', 'Agent to remove')
+    .argument('[agent]', 'Agent to remove')
     .option('--repo <name>', 'Only remove from a specific repo')
     .option('--yes', 'Skip confirmation')
     .action(async (agent, opts) => {
       try {
+        if (!agent) {
+          const config = requireConfig();
+          const current = config.agents ?? [];
+          console.log(`\nCurrently configured: ${current.length ? current.join(', ') : 'none'}\n`);
+          console.log(`Usage: devnexus agent rm <agent>\n`);
+          console.log(`Example: devnexus agent rm cursor`);
+          return;
+        }
         await runAgentRm(agent, opts);
       } catch (err) {
         log.error(err.message);
@@ -123,10 +137,20 @@ function runAgentLs() {
   console.log('');
 }
 
+function suggestAgent(input) {
+  const lower = input.toLowerCase();
+  for (const agent of SUPPORTED_AGENTS) {
+    if (agent.startsWith(lower) || lower.startsWith(agent.slice(0, 3))) return agent;
+  }
+  return null;
+}
+
 async function runAgentAdd(agentName, opts) {
   const { valid, invalid } = validateAgents([agentName]);
   if (valid.length === 0) {
-    log.error(`Unknown agent '${agentName}'. Supported: ${SUPPORTED_AGENTS.join(', ')}`);
+    const suggestion = suggestAgent(agentName);
+    const hint = suggestion ? ` Did you mean '${suggestion}'?` : '';
+    log.error(`Unknown agent '${agentName}'.${hint}\n\nAvailable: ${SUPPORTED_AGENTS.join(', ')}`);
     process.exit(1);
   }
 
@@ -179,7 +203,9 @@ async function runAgentAdd(agentName, opts) {
 async function runAgentRm(agentName, opts) {
   const { valid } = validateAgents([agentName]);
   if (valid.length === 0) {
-    log.error(`Unknown agent '${agentName}'. Supported: ${SUPPORTED_AGENTS.join(', ')}`);
+    const suggestion = suggestAgent(agentName);
+    const hint = suggestion ? ` Did you mean '${suggestion}'?` : '';
+    log.error(`Unknown agent '${agentName}'.${hint}\n\nAvailable: ${SUPPORTED_AGENTS.join(', ')}`);
     process.exit(1);
   }
 
