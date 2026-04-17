@@ -85,11 +85,16 @@ The Git plugin is pre-configured by `devnexus init` — auto-commit and auto-pul
 One engineer's discovery is every engineer's context — within minutes, not meetings.
 
 ```
-10:00am  Engineer A's agent tries approach X → fails
-10:01am  Agent logs to DECISIONS.md → git push
+10:00am  Engineer A's agent tries approach X on UserSync → fails
+10:01am  Agent creates decisions/2026-04-16-usersync-polling-rejected.md → git push
 10:01am  Obsidian Git syncs on Engineer B's machine (~1 min)
-10:15am  Engineer B starts a new session → agent already knows X doesn't work
+10:15am  Engineer B opens UserSync's node file → sees the decision linked
+         before they even think about editing it
 ```
+
+Decisions about specific code symbols go in `decisions/` as individual files with explicit refs. `devnexus index` links them back into the code graph. Project-level decisions (tooling, license, infra) stay in `DECISIONS.md` append-only. See [Decision System](docs/DECISIONS.md) for details.
+
+**Sync model:** Obsidian Git auto-pulls every minute and pushes after commits. This is git-based, not a server — scales with your git host. Merge conflicts are rare because vault entries are append-only or in separate files.
 
 **Joining an existing workspace:**
 
@@ -125,6 +130,30 @@ devnexus agent rm <agent>         remove an agent
 devnexus completion install       set up shell tab completion (bash/zsh/fish)
 devnexus completion uninstall     remove tab completion
 ```
+
+---
+
+## How It Works
+
+devnexus builds a **code graph** from your repos and writes it into the vault as browsable Obsidian files.
+
+`devnexus analyze` builds a raw graph per repo — every function, class, and type becomes a node, call relationships become edges. `devnexus index` merges them into a single cross-repo view and computes structural analysis:
+
+- **God nodes** — symbols with high [betweenness centrality](https://en.wikipedia.org/wiki/Betweenness_centrality). Many shortest paths route through them, so changes ripple further than edge count suggests. Always surfaced so agents check before editing.
+- **Communities** — groups of symbols that call each other more than they call outside the group. Auto-detected, named from file paths, with hub nodes identified.
+- **Bridges** — the sole call edge between two communities. If it breaks, those communities disconnect.
+- **Knowledge gaps** — thin communities, oversized communities, low cohesion. Structural warning signs.
+
+What ends up in the vault:
+
+| File | What it is |
+|------|------------|
+| `nodes/{community}/*.md` | Individual symbol files — callers, callees, linked decisions |
+| `NODE_INDEX.md` | Every symbol with tier (god/hub/regular), edges, centrality score |
+| `GRAPH_REPORT.md` | Structural analysis — god nodes, bridges, gaps, diff from last index |
+| `decisions/DECISION_INDEX.md` | Auto-generated index of symbol-linked decisions |
+
+Cross-repo symbols are namespaced (`frontend::UserCard` vs `backend::UserCard`), so the merged graph shows how repos connect without collisions.
 
 ---
 
