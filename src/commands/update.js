@@ -227,8 +227,10 @@ function migrateDecisions(vaultName) {
     entries[i].body = content.slice(entries[i].startIdx, nextMatch).trim();
   }
 
-  // Heuristic: does the body reference code symbols? (PascalCase or camelCase identifiers)
-  const codeRefPattern = /\b[A-Z][a-zA-Z0-9]+(?:\.[a-zA-Z]+)?\b/;
+  // Heuristic: does the body reference code symbols?
+  // Require camelCase (buildIndex) or PascalCase with mixed case after first char (DealState)
+  // Filters out common English words like "Set", "Vault", "Obsidian"
+  const codeRefPattern = /\b(?:[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*)\b/;
   const symbolEntries = entries.filter(e => codeRefPattern.test(e.body) || codeRefPattern.test(e.title));
 
   if (symbolEntries.length === 0) {
@@ -246,9 +248,9 @@ function migrateDecisions(vaultName) {
     const slug = entry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const filename = `${entry.date}-${slug}.md`;
 
-    // Best-effort ref extraction: find PascalCase words that look like symbols
+    // Best-effort ref extraction: find camelCase/PascalCase identifiers that look like code symbols
     const refs = [];
-    const refMatches = (entry.body + ' ' + entry.title).matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g);
+    const refMatches = (entry.body + ' ' + entry.title).matchAll(/\b([a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*)\b/g);
     for (const m of refMatches) {
       if (!refs.includes(m[1])) refs.push(m[1]);
     }
