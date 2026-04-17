@@ -45,7 +45,14 @@ Read \`../ai-profile/\` before starting work — it contains the user's working 
 export function codeIntelligence() {
   return `# Code Intelligence (GitNexus)
 
-If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is active. Use it before touching code.
+If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is active. Use it for all code exploration — not just before edits.
+
+## When Researching / Exploring
+
+- **For quick lookups** (a specific string, error message, variable name): grep is fine.
+- **For understanding how something works** (tracing a flow, finding all callers, understanding blast radius): use \`gitnexus_query({query: "concept"})\` — it returns process-grouped results ranked by relevance.
+- **To understand a symbol:** \`gitnexus_context({name: "symbolName"})\` — shows all callers, callees, and which execution flows it participates in.
+- **To trace a bug:** query first, then follow execution flows with \`gitnexus_context\` on suspect functions.
 
 ## Always Do
 
@@ -53,7 +60,6 @@ If this repo has a \`.gitnexus/\` directory, the GitNexus MCP server is active. 
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding.
 - **MUST run \`gitnexus_detect_changes({scope: "staged"})\` before every commit** to verify your changes only affect expected symbols and execution flows.
 - For full context on a symbol (callers, callees, execution flows): \`gitnexus_context({name: "symbolName"})\`.
-- To find code by concept instead of grepping: \`gitnexus_query({query: "concept"})\`.
 
 ## When Debugging
 
