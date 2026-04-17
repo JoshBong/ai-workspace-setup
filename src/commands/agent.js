@@ -51,18 +51,13 @@ export function agentCommand() {
             log.plain('All agents are already configured.');
             return;
           }
-          try {
-            const { picked } = await promptWithEsc([{
-              type: 'list',
-              name: 'picked',
-              message: 'Which agent to add? (esc to cancel)',
-              choices: available,
-            }]);
-            agent = picked;
-          } catch (err) {
-            if (err.message === 'esc') { console.log(''); return; }
-            throw err;
-          }
+          const { picked } = await inquirer.prompt([{
+            type: 'list',
+            name: 'picked',
+            message: 'Which agent to add?',
+            choices: available,
+          }]);
+          agent = picked;
         }
         await runAgentAdd(agent, opts);
       } catch (err) {
@@ -86,18 +81,13 @@ export function agentCommand() {
             log.plain('No agents configured.');
             return;
           }
-          try {
-            const { picked } = await promptWithEsc([{
-              type: 'list',
-              name: 'picked',
-              message: 'Which agent to remove? (esc to cancel)',
-              choices: current,
-            }]);
-            agent = picked;
-          } catch (err) {
-            if (err.message === 'esc') { console.log(''); return; }
-            throw err;
-          }
+          const { picked } = await inquirer.prompt([{
+            type: 'list',
+            name: 'picked',
+            message: 'Which agent to remove?',
+            choices: current,
+          }]);
+          agent = picked;
         }
         await runAgentRm(agent, opts);
       } catch (err) {
@@ -281,30 +271,6 @@ async function runAgentRm(agentName, opts) {
   }
 }
 
-function promptWithEsc(questions) {
-  return new Promise((resolve, reject) => {
-    const rl = process.stdin;
-    const wasRaw = rl.isRaw;
-
-    const onKeypress = (chunk) => {
-      if (chunk && chunk.toString() === '\u001b') {
-        process.stdin.removeListener('data', onKeypress);
-        reject(new Error('esc'));
-      }
-    };
-
-    process.stdin.on('data', onKeypress);
-
-    inquirer.prompt(questions).then((answers) => {
-      process.stdin.removeListener('data', onKeypress);
-      resolve(answers);
-    }).catch((err) => {
-      process.stdin.removeListener('data', onKeypress);
-      reject(err);
-    });
-  });
-}
-
 async function runAgentInteractive() {
   const config = requireConfig();
   const current = config.agents ?? [];
@@ -313,53 +279,45 @@ async function runAgentInteractive() {
   console.log(chalk.bold('Configured agents: ') + (current.length ? current.join(', ') : chalk.dim('none')));
   console.log('');
 
-  try {
-    const choices = [
-      { name: 'Add an agent', value: 'add' },
-      { name: 'Remove an agent', value: 'rm' },
-      { name: 'List agents', value: 'ls' },
-    ];
+  const choices = [
+    { name: 'Add an agent', value: 'add' },
+    { name: 'Remove an agent', value: 'rm' },
+    { name: 'List agents', value: 'ls' },
+  ];
 
-    const { action } = await promptWithEsc([{
-      type: 'list',
-      name: 'action',
-      message: 'What do you want to do? (esc to exit)',
-      choices,
-    }]);
+  const { action } = await inquirer.prompt([{
+    type: 'list',
+    name: 'action',
+    message: 'What do you want to do?',
+    choices,
+  }]);
 
-    if (action === 'ls') {
-      runAgentLs();
-    } else if (action === 'add') {
-      const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
-      if (available.length === 0) {
-        log.plain('All agents are already configured.');
-        return;
-      }
-      const { picked } = await promptWithEsc([{
-        type: 'list',
-        name: 'picked',
-        message: 'Which agent to add? (esc to go back)',
-        choices: available,
-      }]);
-      await runAgentAdd(picked, {});
-    } else if (action === 'rm') {
-      if (current.length === 0) {
-        log.plain('No agents configured.');
-        return;
-      }
-      const { picked } = await promptWithEsc([{
-        type: 'list',
-        name: 'picked',
-        message: 'Which agent to remove? (esc to go back)',
-        choices: current,
-      }]);
-      await runAgentRm(picked, {});
-    }
-  } catch (err) {
-    if (err.message === 'esc') {
-      console.log('');
+  if (action === 'ls') {
+    runAgentLs();
+  } else if (action === 'add') {
+    const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
+    if (available.length === 0) {
+      log.plain('All agents are already configured.');
       return;
     }
-    throw err;
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: 'Which agent to add?',
+      choices: available,
+    }]);
+    await runAgentAdd(picked, {});
+  } else if (action === 'rm') {
+    if (current.length === 0) {
+      log.plain('No agents configured.');
+      return;
+    }
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: 'Which agent to remove?',
+      choices: current,
+    }]);
+    await runAgentRm(picked, {});
   }
 }
