@@ -14,8 +14,9 @@ Before reading the vault, read these files to understand who you're working with
 Read these vault files before doing anything else:
 
 1. \`./${vaultName}/MOC.md\` — map of content, entry point, session start sequence
-2. \`./${vaultName}/DECISIONS.md\` — rejected approaches and why; check before proposing alternatives
-3. \`./${vaultName}/SESSION_LOG.md\` — where the last session left off
+2. \`./${vaultName}/DECISIONS.md\` — project-level decisions (license, tooling, infra)
+3. \`./${vaultName}/decisions/DECISION_INDEX.md\` — symbol-linked decisions; check before editing any referenced symbol
+4. \`./${vaultName}/SESSION_LOG.md\` — where the last session left off
 4. \`./${vaultName}/ARCHITECTURE_OVERVIEW.md\` — system design and how repos connect (read on demand)
 
 Do not suggest code changes until you have read all of the above.
@@ -76,28 +77,57 @@ After completing work, check whether the vault needs updating before ending the 
 - A new repo or service was added
 - A known gap was resolved or a new one discovered
 
-## Always add to \`DECISIONS.md\` when:
-- An approach was tried and rejected (two sentences: what and why)
+## Always log decisions when:
+- An approach was tried and rejected
 - A non-obvious architectural choice was made
 - A library or pattern was considered and ruled out
 
+## Where to log decisions
+
+**Symbol-linked decisions** (about specific functions, classes, types):
+→ Create an atomic file in \`./${vaultName}/decisions/\`
+
+**Project-level decisions** (license, tooling, infra, process):
+→ Append to \`./${vaultName}/DECISIONS.md\`
+
 ## Live decision capture (do this DURING the session, not just at the end):
-When any of these happen mid-session, immediately say: *"That's worth logging in DECISIONS.md — [one-line summary]. Want me to add it now?"*
+When any of these happen mid-session, immediately say: *"That's worth logging — [one-line summary]. Want me to add it now?"*
 
 - An approach was attempted and failed or was abandoned
 - The user says "that didn't work", "let's try something else", "scrap that", "go back"
 - A workaround was chosen over a cleaner solution (and why)
 - A bug was caused by a non-obvious interaction
 - A library or tool was evaluated and rejected
-- You discover the current approach contradicts something already in DECISIONS.md
+- You discover the current approach contradicts an existing decision
 
 Do NOT wait until the end of the session. Log it as it happens.
 
-## How to write a DECISIONS.md entry:
+## How to write a symbol-linked decision:
 
-**Before writing:** Run \`cd ${vaultName} && git pull\` to get the latest version.
+**Before writing:** Run \`cd ${vaultName} && git pull\`
 
-**Format:**
+**Create a file** at \`./${vaultName}/decisions/YYYY-MM-DD-short-slug.md\`:
+\`\`\`markdown
+# Short decision title
+
+Date: YYYY-MM-DD
+Author: [engineer name]
+Status: ACTIVE
+Refs: [[SymbolName]], [[OtherSymbol]]
+Depends: (filename of prior related decision, if any)
+
+---
+
+What was considered and why it was rejected/chosen.
+\`\`\`
+
+**After writing:** Run \`cd ${vaultName} && git add decisions/ && git commit -m "decision: [short title]" && git push\`
+
+## How to write a project-level decision:
+
+**Before writing:** Run \`cd ${vaultName} && git pull\`
+
+**Append to** \`./${vaultName}/DECISIONS.md\`:
 \`\`\`markdown
 ## YYYY-MM-DD — Short title (by [engineer name])
 

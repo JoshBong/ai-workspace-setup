@@ -13,7 +13,7 @@ import { validateAgents, getPointerFilename, getAgentDisplay, isInlineAgent } fr
 import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo } from '../lib/git.js';
 import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
 import { promptProjectInfo, promptRepos, promptAgents, promptExistingVault } from '../lib/prompts.js';
-import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES } from '../constants.js';
+import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES, DECISIONS_DIR } from '../constants.js';
 import * as profileTemplates from '../templates/profile.js';
 import * as vaultTemplates from '../templates/vault.js';
 import * as obsidianTemplates from '../templates/obsidian.js';
@@ -413,6 +413,8 @@ function createVault({ vaultName, projectName, description, techStack, author, d
   writeFile(path.join(vaultDir, 'ARCHITECTURE_OVERVIEW.md'), vaultTemplates.architecture({ projectName, description, techStack, date }));
   writeFile(path.join(vaultDir, 'API_CONTRACTS.md'), vaultTemplates.apiContracts({ date }));
   writeFile(path.join(vaultDir, 'DECISIONS.md'), vaultTemplates.decisions({ date, author }));
+  ensureDir(path.join(vaultDir, DECISIONS_DIR));
+  writeFile(path.join(vaultDir, DECISIONS_DIR, 'README.md'), vaultTemplates.decisionsReadme());
   writeFile(path.join(vaultDir, 'SESSION_LOG.md'), vaultTemplates.sessionLog());
   writeFile(path.join(vaultDir, 'GRAPH_REPORT.md'), vaultTemplates.graphReport({ projectName, date }));
 

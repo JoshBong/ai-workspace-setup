@@ -60,14 +60,15 @@ ${repoList || '| (add repos) | Active | |'}
 |------|---------|
 | [[ARCHITECTURE_OVERVIEW]] | How the system works, key communities |
 | [[API_CONTRACTS]] | Endpoint shapes — final authority |
-| [[DECISIONS]] | Rejected approaches, non-obvious choices |
+| [[DECISIONS]] | Project-level decisions (license, tooling, infra) |
+| [[decisions/DECISION_INDEX]] | Symbol-linked decisions — auto-generated index |
 | [[GRAPH_REPORT]] | Structural analysis: nodes, edges, communities, god nodes |
 | [[SESSION_LOG]] | Two-line handoff notes per session |
 
 ## Session Start Sequence
 
 1. Read this file (MOC.md)
-2. Read DECISIONS.md — what's been tried and why
+2. Read DECISIONS.md + decisions/DECISION_INDEX.md — what's been tried and why
 3. For current work: check SESSION_LOG.md for last handoff
 4. For architecture questions: ARCHITECTURE_OVERVIEW.md → GRAPH_REPORT.md
 
@@ -113,18 +114,67 @@ Errors: 400 (validation), 409 (duplicate email)
 }
 
 export function decisions({ date, author }) {
-  return `# Decisions Log
+  return `# Decisions Log — Project Level
 
-> Reverse-chronological log of non-obvious decisions, rejected approaches, and dead ends.
-> When you reject an approach or make a choice that isn't self-evident from the code, add an entry.
+> Append-only log for **project-level** decisions that don't reference specific code symbols.
+> Examples: license choices, tooling picks, infra decisions, team process choices.
+> For decisions about specific functions/classes/symbols, use \`decisions/\` instead.
 > Format: ## YYYY-MM-DD — Title (by [name]) followed by two sentences.
-> Agents read this before suggesting alternatives you've already ruled out.
 
 ---
 
 ## ${date} — Workspace setup (by ${author})
 
 Set up AI-augmented workspace with Obsidian vault as shared brain, CLAUDE.md for session context, and .ai-rules per repo. Vault is the single source of truth — agents read it before writing code.
+`;
+}
+
+export function decisionsReadme() {
+  return `# Symbol-Linked Decisions
+
+> Each file in this directory is an atomic decision that references specific code symbols.
+> \`devnexus index\` reads these files and injects backlinks into node files so agents see relevant decisions before editing.
+
+## When to create a file here
+
+When a decision involves specific functions, classes, types, or modules — e.g., "rejected splitting DealState" or "chose polling over websockets in syncEngine".
+
+For project-level decisions (license, tooling, infra), append to \`../DECISIONS.md\` instead.
+
+## File format
+
+\`\`\`markdown
+# Short decision title
+
+Date: YYYY-MM-DD
+Author: [name]
+Status: ACTIVE
+Refs: [[SymbolName]], [[OtherSymbol]]
+Depends: YYYY-MM-DD-prior-decision.md
+
+---
+
+What was considered and why it was rejected/chosen. Free-form.
+\`\`\`
+
+## Fields
+
+- **Date:** When the decision was made
+- **Author:** Who made it
+- **Status:** ACTIVE / SUPERSEDED / STALE (STALE is auto-set by \`devnexus index\` when ref'd symbols no longer exist)
+- **Refs:** Wikilinks to symbols in the code graph. These trigger backlink injection into node files.
+- **Depends:** Filename of a prior decision this builds on, reverses, or supersedes. Creates a decision chain.
+
+## Naming convention
+
+\`YYYY-MM-DD-short-slug.md\` — e.g., \`2026-04-16-dealstate-split-rejected.md\`
+
+## What happens on \`devnexus index\`
+
+1. All files here are parsed
+2. \`DECISION_INDEX.md\` is auto-generated (do not edit it)
+3. For each \`Refs:\` symbol found in the graph, a \`## Decisions\` section is injected into that symbol's node file
+4. If a ref'd symbol no longer exists in the graph, the decision is flagged as STALE
 `;
 }
 
