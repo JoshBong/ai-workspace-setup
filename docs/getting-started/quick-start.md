@@ -82,6 +82,33 @@ Open the vault in Obsidian, then start your AI agent. It will:
 
 That's it. Every future session starts with full context from every past session.
 
+## .gitignore
+
+devnexus generates files that should not be committed to your project repos. Add these to each repo's `.gitignore`:
+
+```gitignore
+# devnexus
+.ai-rules/
+.workspace-config
+ai-profile/
+*-vault/
+
+# agent pointer files
+CLAUDE.md
+AGENTS.md
+.cursorrules
+.windsurfrules
+
+# obsidian
+.obsidian/
+
+# code intelligence
+.gitnexus/
+.claude/
+```
+
+> `devnexus init` automatically adds `.ai-rules/`, `.cursor/`, and `.gitnexus` to each repo's `.gitignore`, but you may want to add the full list above.
+
 ## Next Steps
 
 - **Adding GitNexus?** → [GitNexus Integration](../integrations/gitnexus.md)
