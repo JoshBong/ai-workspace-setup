@@ -8,7 +8,7 @@ import { ensureDir, writeFile, migrateExistingPointer } from '../lib/fs-helpers.
 import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
 import * as pointerTemplates from '../templates/pointers.js';
 import { TEMPLATE_VERSION } from '../constants.js';
-import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
+import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 
@@ -165,7 +165,12 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents
 
   const gnHookResult = installGitNexusHook(absRepoDir);
   if (gnHookResult.installed) {
-    log.success(`${path.basename(absRepoDir)}: GitNexus hook ${gnHookResult.updated ? 'updated' : 'installed'}`);
+    log.success(`${path.basename(absRepoDir)}: GitNexus post-commit hook ${gnHookResult.updated ? 'updated' : 'installed'}`);
+  }
+
+  const gnMergeResult = installGitNexusPostMergeHook(absRepoDir);
+  if (gnMergeResult.installed) {
+    log.success(`${path.basename(absRepoDir)}: GitNexus post-merge hook ${gnMergeResult.updated ? 'updated' : 'installed'}`);
   }
 }
 

@@ -3,6 +3,7 @@ import path from 'path';
 
 const HOOK_MARKER = '# devnexus: contract-drift-hook';
 const GITNEXUS_HOOK_MARKER = '# devnexus: gitnexus-hook';
+const GITNEXUS_POST_MERGE_MARKER = '# devnexus: gitnexus-post-merge-hook';
 
 function gitNexusHookScript() {
   return `#!/usr/bin/env bash
@@ -10,6 +11,40 @@ ${GITNEXUS_HOOK_MARKER}
 # Rebuilds GitNexus knowledge graph after every commit.
 # To disable: remove this file or delete these lines.
 npx gitnexus analyze 2>/dev/null || true
+`;
+}
+
+function gitNexusPostMergeScript() {
+  return `#!/usr/bin/env bash
+${GITNEXUS_POST_MERGE_MARKER}
+# After a pull/merge: re-analyze the graph and flag large drift.
+# To disable: remove this file or delete these lines.
+
+META=.gitnexus/meta.json
+
+read_nodes() {
+  [ -f "$1" ] || { echo 0; return; }
+  grep -oE '"nodes"[[:space:]]*:[[:space:]]*[0-9]+' "$1" 2>/dev/null \\
+    | head -1 | grep -oE '[0-9]+' || echo 0
+}
+
+OLD=$(read_nodes "$META")
+
+npx gitnexus analyze 2>/dev/null || true
+
+NEW=$(read_nodes "$META")
+
+if [ "$OLD" -gt 0 ] && [ "$NEW" -gt 0 ]; then
+  if [ "$NEW" -ge "$OLD" ]; then DELTA=$((NEW - OLD)); else DELTA=$((OLD - NEW)); fi
+  THRESHOLD=$((OLD / 10))
+  [ "$THRESHOLD" -lt 20 ] && THRESHOLD=20
+  if [ "$DELTA" -gt "$THRESHOLD" ]; then
+    echo ""
+    echo "devnexus: large graph change detected (\${OLD} → \${NEW} symbols)"
+    echo "  Run 'devnexus index' to refresh vault docs for the next session."
+    echo ""
+  fi
+fi
 `;
 }
 
@@ -115,6 +150,33 @@ export function installGitNexusHook(repoAbsDir) {
       return { installed: true, updated: true };
     }
     return { installed: false, reason: 'post-commit hook already exists (not managed by devnexus)' };
+  }
+
+  fs.writeFileSync(hookPath, script);
+  fs.chmodSync(hookPath, '755');
+  return { installed: true, updated: false };
+}
+
+export function installGitNexusPostMergeHook(repoAbsDir) {
+  const gitDir = path.join(repoAbsDir, '.git');
+  if (!fs.existsSync(gitDir)) return { installed: false, reason: 'not a git repo' };
+
+  const hooksDir = path.join(gitDir, 'hooks');
+  if (!fs.existsSync(hooksDir)) {
+    fs.mkdirSync(hooksDir, { recursive: true });
+  }
+
+  const hookPath = path.join(hooksDir, 'post-merge');
+  const script = gitNexusPostMergeScript();
+
+  if (fs.existsSync(hookPath)) {
+    const existing = fs.readFileSync(hookPath, 'utf-8');
+    if (existing.includes(GITNEXUS_POST_MERGE_MARKER)) {
+      fs.writeFileSync(hookPath, script);
+      fs.chmodSync(hookPath, '755');
+      return { installed: true, updated: true };
+    }
+    return { installed: false, reason: 'post-merge hook already exists (not managed by devnexus)' };
   }
 
   fs.writeFileSync(hookPath, script);

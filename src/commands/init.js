@@ -18,7 +18,7 @@ import * as obsidianTemplates from '../templates/obsidian.js';
 import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
-import { installContractHook, installGitNexusHook } from '../lib/hooks.js';
+import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
 import { installCompletion } from '../lib/completion.js';
 
 export function initCommand() {
@@ -454,6 +454,14 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
     log.success('Installed GitNexus post-commit hook');
   } else {
     log.warn(`GitNexus hook: ${gnHookResult.reason}`);
+  }
+
+  // Install GitNexus post-merge hook (re-analyze after pulls, flag big drift)
+  const gnMergeResult = installGitNexusPostMergeHook(absRepoDir);
+  if (gnMergeResult.installed) {
+    log.success('Installed GitNexus post-merge hook');
+  } else {
+    log.warn(`GitNexus post-merge hook: ${gnMergeResult.reason}`);
   }
 
   // Create pointer files
