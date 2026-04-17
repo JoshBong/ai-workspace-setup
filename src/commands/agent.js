@@ -9,6 +9,7 @@ import { writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { SUPPORTED_AGENTS } from '../constants.js';
 import * as pointerTemplates from '../templates/pointers.js';
 import { detectStack } from '../lib/detect-stack.js';
+import inquirer from 'inquirer';
 import { confirm, promptAgents } from '../lib/prompts.js';
 
 export function agentCommand() {
@@ -43,10 +44,20 @@ export function agentCommand() {
     .action(async (agent, opts) => {
       try {
         if (!agent) {
-          console.log(`\nAvailable agents: ${SUPPORTED_AGENTS.join(', ')}\n`);
-          console.log(`Usage: devnexus agent add <agent>\n`);
-          console.log(`Example: devnexus agent add cursor`);
-          return;
+          const config = requireConfig();
+          const current = config.agents ?? [];
+          const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
+          if (available.length === 0) {
+            log.plain('All agents are already configured.');
+            return;
+          }
+          const { picked } = await inquirer.prompt([{
+            type: 'list',
+            name: 'picked',
+            message: 'Which agent to add?',
+            choices: available.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+          }]);
+          agent = picked;
         }
         await runAgentAdd(agent, opts);
       } catch (err) {
@@ -66,10 +77,17 @@ export function agentCommand() {
         if (!agent) {
           const config = requireConfig();
           const current = config.agents ?? [];
-          console.log(`\nCurrently configured: ${current.length ? current.join(', ') : 'none'}\n`);
-          console.log(`Usage: devnexus agent rm <agent>\n`);
-          console.log(`Example: devnexus agent rm cursor`);
-          return;
+          if (current.length === 0) {
+            log.plain('No agents configured.');
+            return;
+          }
+          const { picked } = await inquirer.prompt([{
+            type: 'list',
+            name: 'picked',
+            message: 'Which agent to remove?',
+            choices: current.map(a => ({ name: `${a} — ${getAgentDisplay(a)}`, value: a })),
+          }]);
+          agent = picked;
         }
         await runAgentRm(agent, opts);
       } catch (err) {

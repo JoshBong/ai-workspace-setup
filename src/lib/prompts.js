@@ -48,7 +48,7 @@ export async function promptAgents({ preselected, fallback = ['claude'] } = {}) 
     {
       type: 'checkbox',
       name: 'agents',
-      message: 'Which AI agents do you use? (space to select, enter to confirm)',
+      message: 'Which AI agents do you use? (↑↓ move, space toggle, enter confirm)',
       choices: SUPPORTED_AGENTS.map(a => ({
         name: a,
         value: a,
