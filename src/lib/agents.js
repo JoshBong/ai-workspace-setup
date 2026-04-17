@@ -28,3 +28,7 @@ export function pointerExists(dir, agent) {
   const filename = getPointerFilename(agent);
   return filename && fs.existsSync(path.join(dir, filename));
 }
+
+export function isInlineAgent(agent) {
+  return AGENTS[agent]?.inline === true;
+}

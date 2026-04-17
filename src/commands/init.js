@@ -7,9 +7,9 @@ import { execSync } from 'child_process';
 import { log } from '../lib/output.js';
 import { writeConfig, readConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
-import { validateAgents, getPointerFilename, getAgentDisplay } from '../lib/agents.js';
+import { validateAgents, getPointerFilename, getAgentDisplay, isInlineAgent } from '../lib/agents.js';
 import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo } from '../lib/git.js';
-import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer } from '../lib/fs-helpers.js';
+import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
 import { promptProjectInfo, promptRepos, promptAgents, promptExistingVault } from '../lib/prompts.js';
 import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES } from '../constants.js';
 import * as profileTemplates from '../templates/profile.js';
@@ -401,19 +401,28 @@ function createWorkspaceRules(vaultName, workspaceDir) {
 }
 
 function createWorkspacePointers({ projectName, vaultName, repoDirs, agents, workspaceDir }) {
+  const rulesDir = path.join(workspaceDir, '.ai-rules');
+
   for (const agent of agents) {
     const filename = getPointerFilename(agent);
     const filePath = path.join(workspaceDir, filename);
-    const content = pointers.workspacePointer({ projectName, vaultName, repos: repoDirs });
 
-    const rulesDir = path.join(workspaceDir, '.ai-rules');
-    if (writeFileIfNotExists(filePath, content)) {
-      log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
-    } else if (migrateExistingPointer(filePath, rulesDir)) {
-      writeFile(filePath, content);
-      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+    if (isInlineAgent(agent)) {
+      // Inline agents get the full concatenated rules
+      const rules = concatenateRules(rulesDir);
+      writeManagedPointer(filePath, rules);
+      log.success(`Created ${filename} (${getAgentDisplay(agent)}) — inline rules`);
     } else {
-      log.plain(`  ${filename} already configured`);
+      // Indirection agents get a thin pointer
+      const content = pointers.workspacePointer({ projectName, vaultName, repos: repoDirs });
+      if (writeFileIfNotExists(filePath, content)) {
+        log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
+      } else if (migrateExistingPointer(filePath, rulesDir)) {
+        writeFile(filePath, content);
+        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+      } else {
+        log.plain(`  ${filename} already configured`);
+      }
     }
   }
 }
@@ -465,18 +474,28 @@ function setupRepoFiles({ repoDir, projectName, vaultName, agents, workspaceDir 
   }
 
   // Create pointer files
+  const repoRulesDir = path.join(absRepoDir, '.ai-rules');
   for (const agent of agents) {
     const filename = getPointerFilename(agent);
     const filePath = path.join(absRepoDir, filename);
-    const content = pointers.repoPointer({ repoDir, repoStack });
 
-    if (writeFileIfNotExists(filePath, content)) {
-      log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
-    } else if (migrateExistingPointer(filePath, path.join(absRepoDir, '.ai-rules'))) {
-      writeFile(filePath, content);
-      log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+    if (isInlineAgent(agent)) {
+      const rules = concatenateRules(repoRulesDir);
+      // Mirror GitNexus block from CLAUDE.md if it exists
+      const gnBlock = extractGitNexusBlock(path.join(absRepoDir, 'CLAUDE.md'));
+      const fullContent = gnBlock ? `${rules}\n\n${gnBlock}` : rules;
+      writeManagedPointer(filePath, fullContent);
+      log.success(`Created ${filename} (${getAgentDisplay(agent)}) — inline rules`);
     } else {
-      log.plain(`  ${filename} already configured`);
+      const content = pointers.repoPointer({ repoDir, repoStack });
+      if (writeFileIfNotExists(filePath, content)) {
+        log.success(`Created ${filename} (${getAgentDisplay(agent)})`);
+      } else if (migrateExistingPointer(filePath, repoRulesDir)) {
+        writeFile(filePath, content);
+        log.success(`Migrated existing ${filename} → .ai-rules/00-existing-rules.md`);
+      } else {
+        log.plain(`  ${filename} already configured`);
+      }
     }
   }
 

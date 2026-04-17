@@ -4,8 +4,8 @@ import path from 'path';
 import { log } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
-import { ensureDir, writeFile, migrateExistingPointer } from '../lib/fs-helpers.js';
-import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
+import { ensureDir, writeFile, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
+import { getPointerFilename, getAgentDisplay, isInlineAgent } from '../lib/agents.js';
 import * as pointerTemplates from '../templates/pointers.js';
 import { TEMPLATE_VERSION } from '../constants.js';
 import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
@@ -67,6 +67,9 @@ async function runUpdate(opts) {
     log.info('Updating workspace .ai-rules/...');
     updateWorkspaceRules(vaultName);
     log.success(`Updated workspace .ai-rules/ -> v${TEMPLATE_VERSION}`);
+
+    // Sync inline agent pointers at workspace level
+    syncInlinePointers(path.resolve('.'), agents);
   }
 
   // Update repo .ai-rules/
@@ -80,6 +83,7 @@ async function runUpdate(opts) {
     log.info(`Updating ${repoDir}/.ai-rules/...`);
     const repoStack = detectStack(absDir);
     updateRepoRules(absDir, { projectName, vaultName, repoStack, agents });
+    syncInlinePointers(absDir, agents);
     log.success(`Updated ${repoDir}/.ai-rules/ -> v${TEMPLATE_VERSION}`);
   }
 
@@ -97,8 +101,20 @@ async function runUpdate(opts) {
     }
   }
 
+  // Show which inline pointers were synced
+  const inlineAgents = agents.filter(a => isInlineAgent(a));
+  if (inlineAgents.length > 0) {
+    console.log('\nSynced inline rules:');
+    for (const agent of inlineAgents) {
+      console.log(`  * ${getPointerFilename(agent)} (${getAgentDisplay(agent)})`);
+    }
+  }
+
   console.log('\nNot touched:');
-  console.log('  - Your pointer files (CLAUDE.md, .cursorrules, etc.)');
+  const nonInline = agents.filter(a => !isInlineAgent(a));
+  if (nonInline.length > 0) {
+    console.log(`  - ${nonInline.map(a => getPointerFilename(a)).join(', ')} (yours to customize)`);
+  }
   console.log('  - Your vault content (ARCHITECTURE.md, DECISIONS.md, etc.)');
   console.log('  - Your AI profile (~/.ai-profile/)\n');
 }
@@ -171,6 +187,23 @@ function updateRepoRules(absRepoDir, { projectName, vaultName, repoStack, agents
   const gnMergeResult = installGitNexusPostMergeHook(absRepoDir);
   if (gnMergeResult.installed) {
     log.success(`${path.basename(absRepoDir)}: GitNexus post-merge hook ${gnMergeResult.updated ? 'updated' : 'installed'}`);
+  }
+}
+
+function syncInlinePointers(dir, agents) {
+  const rulesDir = path.join(dir, '.ai-rules');
+  const rules = concatenateRules(rulesDir);
+
+  // Mirror GitNexus block from CLAUDE.md if it exists
+  const gnBlock = extractGitNexusBlock(path.join(dir, 'CLAUDE.md'));
+  const fullContent = gnBlock ? `${rules}\n\n${gnBlock}` : rules;
+
+  for (const agent of agents) {
+    if (!isInlineAgent(agent)) continue;
+    const filename = getPointerFilename(agent);
+    const filePath = path.join(dir, filename);
+    writeManagedPointer(filePath, fullContent);
+    log.success(`Synced ${filename} (${getAgentDisplay(agent)}) — inline rules`);
   }
 }
 

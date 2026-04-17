@@ -1,18 +1,21 @@
 import os from 'os';
 import path from 'path';
 
-export const TEMPLATE_VERSION = '2.12';
+export const TEMPLATE_VERSION = '2.13';
 export const CONFIG_VERSION = '2.0';
 export const CONFIG_FILE = '.workspace-config';
 
 export const AI_PROFILE_DIR = path.join(os.homedir(), '.ai-profile');
 
 export const AGENTS = {
-  claude:   { pointer: 'CLAUDE.md',       display: 'Claude Code' },
-  cursor:   { pointer: '.cursorrules',     display: 'Cursor' },
-  codex:    { pointer: 'AGENTS.md',        display: 'Codex' },
-  windsurf: { pointer: '.windsurfrules',   display: 'Windsurf' },
+  claude:   { pointer: 'CLAUDE.md',       display: 'Claude Code',  inline: false },
+  cursor:   { pointer: '.cursorrules',     display: 'Cursor',       inline: true  },
+  codex:    { pointer: 'AGENTS.md',        display: 'Codex',        inline: false },
+  windsurf: { pointer: '.windsurfrules',   display: 'Windsurf',     inline: true  },
 };
+
+export const MANAGED_FENCE_START = '<!-- devnexus:managed:start -->';
+export const MANAGED_FENCE_END = '<!-- devnexus:managed:end -->';
 
 export const SUPPORTED_AGENTS = Object.keys(AGENTS);
 
