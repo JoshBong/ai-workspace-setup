@@ -9,11 +9,19 @@ import { writeFileIfNotExists } from '../lib/fs-helpers.js';
 import { SUPPORTED_AGENTS } from '../constants.js';
 import * as pointerTemplates from '../templates/pointers.js';
 import { detectStack } from '../lib/detect-stack.js';
-import { confirm } from '../lib/prompts.js';
+import { confirm, promptAgents } from '../lib/prompts.js';
 
 export function agentCommand() {
   const cmd = new Command('agent')
-    .description('Manage which AI agents are configured');
+    .description('Manage AI agents. Run with no subcommand for an interactive picker.')
+    .action(async () => {
+      try {
+        await runAgentInteractive();
+      } catch (err) {
+        log.error(err.message);
+        process.exit(1);
+      }
+    });
 
   cmd
     .command('ls')
@@ -217,4 +225,35 @@ async function runAgentRm(agentName, opts) {
       log.success(`Removed ${repoDir}/${filename}`);
     }
   }
+}
+
+async function runAgentInteractive() {
+  const config = requireConfig();
+  const current = config.agents ?? [];
+
+  console.log('');
+  console.log(chalk.bold('Currently configured: ') + (current.length ? current.join(', ') : chalk.dim('none')));
+  console.log('');
+
+  const selected = await promptAgents({ preselected: current, fallback: current });
+  const toAdd = selected.filter(a => !current.includes(a));
+  const toRemove = current.filter(a => !selected.includes(a));
+
+  if (toAdd.length === 0 && toRemove.length === 0) {
+    log.plain('No changes.');
+    return;
+  }
+
+  for (const agent of toAdd) {
+    await runAgentAdd(agent, {});
+  }
+  for (const agent of toRemove) {
+    await runAgentRm(agent, { yes: true });
+  }
+
+  console.log('');
+  const summary = [];
+  if (toAdd.length) summary.push(`added ${toAdd.join(', ')}`);
+  if (toRemove.length) summary.push(`removed ${toRemove.join(', ')}`);
+  log.success(`Done — ${summary.join('; ')}.`);
 }

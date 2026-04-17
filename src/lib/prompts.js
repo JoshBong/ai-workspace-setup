@@ -54,7 +54,8 @@ export async function promptRepos() {
   return repos;
 }
 
-export async function promptAgents() {
+export async function promptAgents({ preselected, fallback = ['claude'] } = {}) {
+  const checkedSet = new Set(preselected ?? ['claude']);
   const { agents } = await inquirer.prompt([
     {
       type: 'checkbox',
@@ -63,12 +64,12 @@ export async function promptAgents() {
       choices: SUPPORTED_AGENTS.map(a => ({
         name: a,
         value: a,
-        checked: a === 'claude',
+        checked: checkedSet.has(a),
       })),
     },
   ]);
 
-  return agents.length > 0 ? agents : ['claude'];
+  return agents.length > 0 ? agents : fallback;
 }
 
 export async function promptExistingVault() {
