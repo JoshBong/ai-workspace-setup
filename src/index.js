@@ -14,6 +14,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { analyzeCommand } from './commands/analyze.js';
 import { indexCommand } from './commands/index.js';
 import { completionCommand } from './commands/completion.js';
+import { upgradeCommand } from './commands/upgrade.js';
 
 export function createProgram() {
   const program = new Command();
@@ -33,6 +34,7 @@ export function createProgram() {
   program.addCommand(analyzeCommand());
   program.addCommand(indexCommand());
   program.addCommand(completionCommand());
+  program.addCommand(upgradeCommand());
 
   return program;
 }

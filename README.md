@@ -109,6 +109,7 @@ The vault is cloned (or linked) into your workspace. Nothing in it is modified.
 
 ```
 devnexus init                     set up a new AI-augmented workspace
+devnexus upgrade                  update devnexus and regenerate workspace rules
 devnexus update                   regenerate .ai-rules/ and git hooks with latest templates
 devnexus add <repo>               add a repo (HTTPS, SSH, or local folder)
 devnexus remove <repo>            remove a repo from workspace tracking
@@ -165,7 +166,7 @@ No — it's managed by devnexus. Your customizations belong in pointer files (`C
 `devnexus agent add windsurf`. List: `devnexus agent ls`. Remove: `devnexus agent rm cursor`.
 
 **How do I update?**
-`npm update -g devnexus` then `devnexus update`. Regenerates `.ai-rules/` and git hooks without touching anything else.
+`devnexus upgrade`. Updates the package and regenerates `.ai-rules/` and git hooks.
 
 **What is the contract drift check?**
 A pre-push hook that blocks pushes when API dirs change without updating `API_CONTRACTS.md`. Bypass with `git push --no-verify`.
