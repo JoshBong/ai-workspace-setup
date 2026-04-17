@@ -282,6 +282,7 @@ async function runAgentInteractive() {
   const choices = [
     { name: 'Add an agent', value: 'add' },
     { name: 'Remove an agent', value: 'rm' },
+    { name: 'List agents', value: 'ls' },
   ];
 
   const { action } = await inquirer.prompt([{
@@ -291,7 +292,9 @@ async function runAgentInteractive() {
     choices,
   }]);
 
-  if (action === 'add') {
+  if (action === 'ls') {
+    runAgentLs();
+  } else if (action === 'add') {
     const available = SUPPORTED_AGENTS.filter(a => !current.includes(a));
     if (available.length === 0) {
       log.plain('All agents are already configured.');
