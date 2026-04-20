@@ -21,7 +21,6 @@ import * as workspaceRules from '../templates/workspace-rules.js';
 import * as repoRules from '../templates/repo-rules.js';
 import * as pointers from '../templates/pointers.js';
 import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
-import { installCompletion } from '../lib/completion.js';
 
 export function initCommand() {
   const cmd = new Command('init')
@@ -145,11 +144,10 @@ async function runInit(opts) {
   });
   s.succeed('Configuring agents...');
 
-  // Phase 5: Hooks
-  s = createSpinner('Installing git hooks...').start();
+  // Phase 5: Nexus registration
+  s = createSpinner('Engaging nexus...').start();
   registerVaultMap(vaultName, path.join(workspaceDir, vaultName));
-  await installCompletion();
-  s.succeed('Installing git hooks...');
+  s.succeed('Engaging nexus...');
 
   // Phase 6: GitNexus (interactive — stays verbose)
   await checkGitNexus(repoDirs, workspaceDir);
@@ -293,9 +291,9 @@ async function runJoin(vaultSource, workspaceDir, opts) {
   });
   s.succeed('Configuring agents...');
 
-  s = createSpinner('Installing git hooks...').start();
+  s = createSpinner('Engaging nexus...').start();
   registerVaultMap(vaultName, vaultDir);
-  s.succeed('Installing git hooks...');
+  s.succeed('Engaging nexus...');
 
   await checkGitNexus(repoDirs, workspaceDir);
 
