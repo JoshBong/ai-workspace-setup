@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="./assets/brain.png" alt="devnexus — shared brain for AI agents" width="720" />
-
 # devnexus
 
 **Your agents start every session with amnesia. devnexus fixes that.**
