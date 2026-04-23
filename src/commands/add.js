@@ -7,7 +7,7 @@ import { log, createSpinner } from '../lib/output.js';
 import { requireConfig, writeConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { getPointerFilename, getAgentDisplay } from '../lib/agents.js';
-import { gitClone } from '../lib/git.js';
+import { gitClone, isGitUrl, repoDirFromUrl } from '../lib/git.js';
 import { ensureDir, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer } from '../lib/fs-helpers.js';
 import { TEMPLATE_VERSION, GITIGNORE_ENTRIES } from '../constants.js';
 import { installContractHook, installGitNexusHook, installGitNexusPostMergeHook } from '../lib/hooks.js';
@@ -45,9 +45,9 @@ async function runAdd(repos, opts) {
   }
 
   for (const repo of repos) {
-    const isUrl = repo.startsWith('http') || repo.startsWith('git@');
+    const isUrl = isGitUrl(repo);
     const isAbsPath = path.isAbsolute(repo);
-    const dirName = isUrl ? path.basename(repo, '.git') : isAbsPath ? path.basename(repo) : repo;
+    const dirName = isUrl ? repoDirFromUrl(repo) : isAbsPath ? path.basename(repo) : repo;
 
     // Check if already tracked
     if (existingRepos.includes(dirName)) {

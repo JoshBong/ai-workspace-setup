@@ -2,9 +2,27 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
+export function isGitUrl(s) {
+  if (typeof s !== 'string' || s.length === 0) return false;
+  return (
+    s.startsWith('http://') ||
+    s.startsWith('https://') ||
+    s.startsWith('ssh://') ||
+    s.startsWith('git://') ||
+    s.startsWith('git+ssh://') ||
+    /^git@[^:]+:/.test(s)
+  );
+}
+
+export function repoDirFromUrl(url) {
+  const scpMatch = url.match(/^git@[^:]+:(.+)$/);
+  const tail = scpMatch ? scpMatch[1] : url;
+  return path.basename(tail, '.git');
+}
+
 export function gitClone(url, cwd = process.cwd()) {
   execSync(`git clone "${url}"`, { cwd, stdio: 'pipe' });
-  return path.basename(url, '.git');
+  return repoDirFromUrl(url);
 }
 
 export function gitInit(dir) {

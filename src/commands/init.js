@@ -10,7 +10,7 @@ import { verifyBuild, applyFixes } from '../lib/verify.js';
 import { writeConfig, readConfig } from '../lib/config.js';
 import { detectStack } from '../lib/detect-stack.js';
 import { validateAgents, getPointerFilename, getAgentDisplay, isInlineAgent } from '../lib/agents.js';
-import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo } from '../lib/git.js';
+import { gitClone, gitInit, gitAddAll, gitCommit, isGitRepo, isGitUrl, repoDirFromUrl } from '../lib/git.js';
 import { ensureDir, createSymlink, addToGitignore, writeFile, writeFileIfNotExists, migrateExistingPointer, concatenateRules, extractGitNexusBlock, writeManagedPointer } from '../lib/fs-helpers.js';
 import { promptProjectInfo, promptRepos, promptAgents, promptExistingVault } from '../lib/prompts.js';
 import { TEMPLATE_VERSION, AI_PROFILE_DIR, GITIGNORE_ENTRIES, DECISIONS_DIR } from '../constants.js';
@@ -205,11 +205,11 @@ async function runInit(opts) {
 async function runJoin(vaultSource, workspaceDir, opts) {
   log.header('Joining Existing Workspace');
 
-  const isUrl = vaultSource.startsWith('http') || vaultSource.startsWith('git@');
+  const isUrl = isGitUrl(vaultSource);
   let vaultName;
 
   if (isUrl) {
-    vaultName = path.basename(vaultSource, '.git');
+    vaultName = repoDirFromUrl(vaultSource);
     const targetPath = path.join(workspaceDir, vaultName);
 
     if (!fs.existsSync(targetPath)) {
@@ -347,7 +347,7 @@ async function runJoin(vaultSource, workspaceDir, opts) {
 function autoDetectTechStack(repoInputs, workspaceDir) {
   const stacks = new Set();
   for (const repo of repoInputs) {
-    const dirName = path.basename(repo, '.git');
+    const dirName = isGitUrl(repo) ? repoDirFromUrl(repo) : path.basename(repo);
     const absPath = path.join(workspaceDir, dirName);
     if (fs.existsSync(absPath)) {
       const detected = detectStack(absPath);
@@ -369,10 +369,10 @@ function setupProfile() {
 }
 
 async function setupRepo(repo, workspaceDir, shouldClone) {
-  const isUrl = repo.startsWith('http') || repo.startsWith('git@');
+  const isUrl = isGitUrl(repo);
 
   if (isUrl && shouldClone !== false) {
-    const dirName = path.basename(repo, '.git');
+    const dirName = repoDirFromUrl(repo);
     const targetPath = path.join(workspaceDir, dirName);
 
     if (fs.existsSync(targetPath)) return dirName;
@@ -384,7 +384,7 @@ async function setupRepo(repo, workspaceDir, shouldClone) {
       return null;
     }
   } else {
-    const dirName = isUrl ? path.basename(repo, '.git') : repo;
+    const dirName = isUrl ? repoDirFromUrl(repo) : repo;
     if (fs.existsSync(path.join(workspaceDir, dirName))) return dirName;
     return null;
   }
@@ -585,7 +585,7 @@ function printDryRun({ projectName, vaultName, repoInputs, agents, workspaceDir 
     log.plain(`  ${getPointerFilename(agent)}`);
   }
   for (const repo of repoInputs) {
-    const dir = path.basename(repo, '.git');
+    const dir = isGitUrl(repo) ? repoDirFromUrl(repo) : path.basename(repo);
     log.plain(`  ${dir}/.ai-rules/`);
     for (const agent of agents) {
       log.plain(`  ${dir}/${getPointerFilename(agent)}`);
